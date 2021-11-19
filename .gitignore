@@ -1,10 +1,10 @@
-Lib/
+jb-include/
+jb-lib/
 x64/
 x86/
 .vs/
 Debug/
 Release/
-*.sln
 *.vcxproj
 *.filters
 *.user

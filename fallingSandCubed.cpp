@@ -11,6 +11,7 @@
 #include "Misc.h"
 #include "GLXtras.h"
 #include "GeomUtils.h"
+#include "dCube.h"
 
 using std::vector;
 
@@ -21,6 +22,7 @@ int win_width = 800, win_height = 800;
 
 Camera camera((float)win_width / win_height, vec3(0, 0, 0), vec3(0, 0, -5));
 vec3 lightSource = vec3(1, 1, 0);
+dCube cube;
 
 enum ParticleType {
 	SAND, WATER, OIL, SALT
@@ -34,9 +36,23 @@ struct ParticleGrid {
 	// include function to write grid to GPU memory
 };
 
-const char* vertShader = R"()";
+const char* vertShader = R"(
+	#version 130
+	in vec3 point;
+	uniform mat4 modelview;
+	uniform mat4 persp;
+	void main() {
+		gl_Position = persp * modelview * vec4(point, 1);
+	}
+)";
 
-const char* fragShader = R"()";
+const char* fragShader = R"(
+	#version 130
+	out vec4 pColor;
+	void main() {
+		pColor = vec4(1);
+	}
+)";
 
 void Resize(GLFWwindow* window, int width, int height) {
 	camera.Resize(win_width = width, win_height = height);
@@ -84,6 +100,10 @@ void Display() {
 	glClear(GL_DEPTH_BUFFER_BIT);
 	glClearColor(0.2f, 0.2f, 0.2f, 1.0f);
 	glClear(GL_COLOR_BUFFER_BIT);
+	glEnable(GL_BLEND);
+	glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+	glEnable(GL_DEPTH_TEST);
+	cube.display(camera, NULL);
 	glFlush();
 }
 
@@ -103,6 +123,7 @@ int main() {
 	if (!(program = LinkProgramViaCode(&vertShader, &fragShader)))
 		return 1;
 	InitVertexBuffer();
+	cube.loadBuffer();
 	glfwWindowHint(GLFW_SAMPLES, 4);
 	glfwSetCursorPosCallback(window, MouseMove);
 	glfwSetMouseButtonCallback(window, MouseButton);
@@ -115,6 +136,7 @@ int main() {
 		glfwPollEvents();
 		glfwSwapBuffers(window);
 	}
+	cube.unloadBuffer();
 	glBindBuffer(GL_ARRAY_BUFFER, 0);
 	glDeleteBuffers(1, &vBuffer);
 	glfwDestroyWindow(window);
