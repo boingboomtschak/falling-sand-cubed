@@ -7,6 +7,18 @@ layout(std430, binding=0) buffer particle_data {
 	int grid[GRID_SIZE][GRID_SIZE][GRID_SIZE][2];
 }; 
 
+void processLiquids() {
+
+}
+
+void processSolids() {
+
+}
+
+void processGases() {
+	
+}
+
 void main() {
 	ivec3 inv = ivec3(gl_GlobalInvocationID);
 	int pbuffer[2] = grid[inv.x][inv.y][inv.z];
@@ -32,3 +44,4 @@ void main() {
 
 
 }
+
