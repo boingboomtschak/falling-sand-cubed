@@ -26,8 +26,14 @@ Camera camera((float)win_width / win_height, vec3(0, 0, 0), vec3(0, 0, -5));
 vec3 lightSource = vec3(1, 1, 0);
 dCube cube;
 
-float cube_points[][3] = { {-1, -1, 1}, {1, -1, 1}, {1, 1, 1}, {-1, 1, 1}, {-1, -1, -1}, {1, -1, -1}, {1, 1, -1}, {-1, 1, -1}, {-1, -1, 1}, {-1, -1, -1}, {-1, 1, -1}, {-1, 1, 1}, {1, -1, 1}, {1, -1, -1}, {1, 1, -1}, {1, 1, 1}, {-1 , 1, 1}, {1, 1, 1}, {1, 1, -1}, {-1, 1, -1}, {-1, -1, 1}, {1, -1, 1}, {1, -1, -1}, {-1, -1, -1} };
-int cube_triangles[][3] = { {0, 1, 2}, {2, 3, 0}, {4, 5, 6}, {6, 7, 4}, {8, 9, 10}, {10, 11, 8}, {12, 13, 14}, {14, 15, 12}, {16, 17, 18}, {18, 19, 16}, {20, 21, 22}, {22, 23, 20} };
+float cube_points[][3] = {
+	{1, 1, 1}, {-1, 1, 1}, {1, 1, -1}, {-1, 1, -1}, 
+	{1, -1, 1}, {-1, -1, 1}, {-1, -1, -1}, {1, -1, -1}
+};
+int cube_triangle_strip[] = {
+	3, 2, 6, 7, 4, 2, 0,
+	3, 1, 6, 5, 4, 1, 0
+};
 
 const int GRID_SIZE = 32;
 
@@ -165,7 +171,7 @@ void cpuRenderGrid() {
 						SetUniform(renderProgram, "color", vec4(0.1f, 0.1f, 0.7f, 1.0f));
 						break;
 					}
-					glDrawElements(GL_TRIANGLES, 36, GL_UNSIGNED_INT, cube_triangles);
+					glDrawElements(GL_TRIANGLE_STRIP, 14, GL_UNSIGNED_INT, cube_triangle_strip);
 				}
 			}
 		}
@@ -191,9 +197,8 @@ void UnloadBuffers() {
 }
 
 void Display() {
-	glClear(GL_DEPTH_BUFFER_BIT);
 	glClearColor(0.8f, 0.8f, 0.8f, 1.0f);
-	glClear(GL_COLOR_BUFFER_BIT);
+	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 	cube.display(camera);
 	cpuRenderGrid();
 	glFlush();
