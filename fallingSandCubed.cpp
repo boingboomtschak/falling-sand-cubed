@@ -18,6 +18,7 @@ using std::vector;
 
 GLuint computeProgram = 0, computeBuffer = 0;
 GLuint renderProgram = 0;
+GLuint tempCubeBuffer = 0;
 
 int win_width = 800, win_height = 800;
 
@@ -25,7 +26,10 @@ Camera camera((float)win_width / win_height, vec3(0, 0, 0), vec3(0, 0, -5));
 vec3 lightSource = vec3(1, 1, 0);
 dCube cube;
 
-const int GRID_SIZE = 8;
+float cube_points[][3] = { {-1, -1, 1}, {1, -1, 1}, {1, 1, 1}, {-1, 1, 1}, {-1, -1, -1}, {1, -1, -1}, {1, 1, -1}, {-1, 1, -1}, {-1, -1, 1}, {-1, -1, -1}, {-1, 1, -1}, {-1, 1, 1}, {1, -1, 1}, {1, -1, -1}, {1, 1, -1}, {1, 1, 1}, {-1 , 1, 1}, {1, 1, 1}, {1, 1, -1}, {-1, 1, -1}, {-1, -1, 1}, {1, -1, 1}, {1, -1, -1}, {-1, -1, -1} };
+int cube_triangles[][3] = { {0, 1, 2}, {2, 3, 0}, {4, 5, 6}, {6, 7, 4}, {8, 9, 10}, {10, 11, 8}, {12, 13, 14}, {14, 15, 12}, {16, 17, 18}, {18, 19, 16}, {20, 21, 22}, {22, 23, 20} };
+
+const int GRID_SIZE = 32;
 
 enum ParticleType {
 	AIR = 0,
@@ -64,7 +68,6 @@ struct ParticleGrid {
 	}
 	void unloadBuffer() {
 		glBindBuffer(GL_SHADER_STORAGE_BUFFER, 0);
-		glBindBuffer(GL_ARRAY_BUFFER, 0);
 		glDeleteBuffers(1, &computeBuffer);
 	}
 	void printGrid() {
@@ -102,6 +105,10 @@ void CompileShaders() {
 		exit(1);
 	}
 	renderProgram = LinkProgramViaFile("vertexShader.glsl", "fragmentShader.glsl");
+	if (!renderProgram) {
+		fprintf(stderr, "SHADER: Error linking render shader! Exiting...\n");
+		exit(1);
+	}
 	/*
 	GLuint vshader = CompileShaderViaFile("vertexShader.glsl", GL_VERTEX_SHADER);
 	if (!vshader) {
@@ -131,7 +138,44 @@ void CompileShaders() {
 	*/
 }
 
+void cpuRenderGrid() {
+	grid.readGrid();
+	glUseProgram(renderProgram);
+	glEnable(GL_BLEND);
+	glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+	glEnable(GL_DEPTH_TEST);
+	glBindBuffer(GL_ARRAY_BUFFER, tempCubeBuffer);
+	VertexAttribPointer(renderProgram, "point", 3, 0, (void*)0);
+	SetUniform(renderProgram, "persp", camera.persp);
+	for (int i = 0; i < GRID_SIZE; i++) {
+		for (int j = 0; j < GRID_SIZE; j++) {
+			for (int k = 0; k < GRID_SIZE; k++) {
+				if (grid.grid[i][j][k][0] != AIR) {
+					mat4 scale = Scale((float)(1.0f / GRID_SIZE));
+					mat4 trans = Translate((i - (GRID_SIZE / 2) + 0.5) * (2.0f / GRID_SIZE), (j - (GRID_SIZE / 2) + 0.5) * (2.0f / GRID_SIZE), (k - (GRID_SIZE / 2) + 0.5) * (2.0f / GRID_SIZE));
+					SetUniform(renderProgram, "modelview", camera.modelview * trans * scale);
+					switch (grid.grid[i][j][k][0]) {
+					case AIR:
+						SetUniform(renderProgram, "color", vec4(0.0f, 0.0f, 0.0f, 0.05f));
+						break;
+					case WALL:
+						SetUniform(renderProgram, "color", vec4(0.1f, 0.1f, 0.1f, 1.0f));
+						break;
+					case WATER:
+						SetUniform(renderProgram, "color", vec4(0.1f, 0.1f, 0.7f, 1.0f));
+						break;
+					}
+					glDrawElements(GL_TRIANGLES, 36, GL_UNSIGNED_INT, cube_triangles);
+				}
+			}
+		}
+	}
+}
+
 void LoadBuffers() {
+	glGenBuffers(1, &tempCubeBuffer);
+	glBindBuffer(GL_ARRAY_BUFFER, tempCubeBuffer);
+	glBufferData(GL_ARRAY_BUFFER, sizeof(cube_points), cube_points, GL_STATIC_DRAW);
 	// Load enclosing cube buffer into GPU
 	cube.loadBuffer();
 	// Generate compute shader buffer
@@ -139,18 +183,19 @@ void LoadBuffers() {
 }
 
 void UnloadBuffers() {
+	glBindBuffer(GL_ARRAY_BUFFER, 0);
+	glBindBuffer(GL_SHADER_STORAGE_BUFFER, 0);
+	glDeleteBuffers(1, &tempCubeBuffer);
 	cube.unloadBuffer();
 	grid.unloadBuffer();
 }
 
 void Display() {
 	glClear(GL_DEPTH_BUFFER_BIT);
-	glClearColor(0.2f, 0.2f, 0.2f, 1.0f);
+	glClearColor(0.8f, 0.8f, 0.8f, 1.0f);
 	glClear(GL_COLOR_BUFFER_BIT);
-	glEnable(GL_BLEND);
-	glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
-	glEnable(GL_DEPTH_TEST);
 	cube.display(camera);
+	cpuRenderGrid();
 	glFlush();
 }
 
