@@ -26,14 +26,8 @@ Camera camera((float)win_width / win_height, vec3(0, 0, 0), vec3(0, 0, -5));
 vec3 lightSource = vec3(1, 1, 0);
 dCube cube;
 
-float cube_points[][3] = {
-	{1, 1, 1}, {-1, 1, 1}, {1, 1, -1}, {-1, 1, -1}, 
-	{1, -1, 1}, {-1, -1, 1}, {-1, -1, -1}, {1, -1, -1}
-};
-int cube_triangle_strip[] = {
-	3, 2, 6, 7, 4, 2, 0,
-	3, 1, 6, 5, 4, 1, 0
-};
+float cube_points[][3] = { {1, 1, 1}, {-1, 1, 1}, {1, 1, -1}, {-1, 1, -1}, {1, -1, 1}, {-1, -1, 1}, {-1, -1, -1}, {1, -1, -1} };
+int cube_triangle_strip[] = { 3, 2, 6, 7, 4, 2, 0, 3, 1, 6, 5, 4, 1, 0 };
 
 const int GRID_SIZE = 32;
 
@@ -218,13 +212,15 @@ int main() {
 	gladLoadGLLoader((GLADloadproc)glfwGetProcAddress);
 	PrintGLErrors();
 	CompileShaders();
-	grid.grid[4][4][4][0] = WATER; // debug
 	LoadBuffers();
 	glfwWindowHint(GLFW_SAMPLES, 4);
 	InitializeCallbacks(window);
 	glfwSwapInterval(1);
 	while (!glfwWindowShouldClose(window)) {
 		grid.compute();
+		grid.readGrid();
+		grid.grid[4][31][4][0] = WATER; // debug
+		grid.writeGrid();
 		Display();
 		glfwPollEvents();
 		glfwSwapBuffers(window);

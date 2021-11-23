@@ -7,6 +7,16 @@ layout(std430, binding=0) buffer particle_data {
 	int grid[GRID_SIZE][GRID_SIZE][GRID_SIZE][2];
 }; 
 
+// Particle types
+const int P_AIR = 0;
+const int P_WALL = 1;
+const int P_WATER = 2;
+const int P_SAND = 3;
+const int P_OIL = 4;
+const int P_SALT = 5;
+
+uniform int solidFloor = 1;
+
 void processLiquids() {
 
 }
@@ -29,9 +39,38 @@ void main() {
 	//} 
 
 	// Process liquids
-	if (pbuffer[0] == 2 && inv.y > 0) {
-		grid[inv.x][inv.y-1][inv.z][0] = pbuffer[0];
-		grid[inv.x][inv.y][inv.z][0] = 0;
+	if (pbuffer[0] == 2) {
+		bool moved = false;
+		// Flow down
+		if (inv.y > 0) {
+			if (grid[inv.x][inv.y-1][inv.z][0] == 0) {
+				grid[inv.x][inv.y-1][inv.z][0] = pbuffer[0];
+				grid[inv.x][inv.y][inv.z][0] = 0;
+				moved = true;
+			}
+		}
+		// Flow to side 
+		if (!moved && inv.z + 1 < GRID_SIZE && grid[inv.x][inv.y][inv.z+1][0] == 0) {
+			grid[inv.x][inv.y][inv.z+1][0] = pbuffer[0];
+			grid[inv.x][inv.y][inv.z][0] = 0;
+			moved = true;
+		}
+		if (!moved && inv.z - 1 > 0 && grid[inv.x][inv.y][inv.z-1][0] == 0) {
+			grid[inv.x+1][inv.y][inv.z-1][0] = pbuffer[0];
+			grid[inv.x][inv.y][inv.z][0] = 0;
+			moved = true;
+		}
+		if (!moved && inv.x + 1 < GRID_SIZE && grid[inv.x+1][inv.y][inv.z][0] == 0) {
+			grid[inv.x+1][inv.y][inv.z][0] = pbuffer[0];
+			grid[inv.x][inv.y][inv.z][0] = 0;
+			moved = true;
+		}
+		if (!moved && inv.x - 1 > 0 && grid[inv.x-1][inv.y][inv.z][0] == 0) {
+			grid[inv.x-1][inv.y][inv.z][0] = pbuffer[0];
+			grid[inv.x][inv.y][inv.z][0] = 0;
+			moved = true;
+		}
+
 	}
 
 
