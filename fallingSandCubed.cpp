@@ -23,17 +23,42 @@ GLuint tempCubeBuffer = 0;
 int win_width = 800, win_height = 800;
 
 Camera camera((float)win_width / win_height, vec3(0, 0, 0), vec3(0, 0, -5));
-vec3 lightSource = vec3(1, 1, 0);
+vec3 lightPos = vec3(1, 1, 0);
 dCube cube;
 
-float cube_points[][3] = { {1, 1, 1}, {-1, 1, 1}, {1, 1, -1}, {-1, 1, -1}, {1, -1, 1}, {-1, -1, 1}, {-1, -1, -1}, {1, -1, -1} };
-int cube_triangle_strip[] = { 3, 2, 6, 7, 4, 2, 0, 3, 1, 6, 5, 4, 1, 0 };
+//float cube_points[][3] = { {1, 1, 1}, {-1, 1, 1}, {1, 1, -1}, {-1, 1, -1}, {1, -1, 1}, {-1, -1, 1}, {-1, -1, -1}, {1, -1, -1} };
+//int cube_triangle_strip[] = { 3, 2, 6, 7, 4, 2, 0, 3, 1, 6, 5, 4, 1, 0 };
+float cube_points[][3] = {
+	{-1, -1, 1}, {1, -1, 1}, {1, 1, 1}, {-1, 1, 1}, // front (0, 1, 2, 3)
+	{-1, -1, -1}, {1, -1, -1}, {1, 1, -1}, {-1, 1, -1}, // back (4, 5, 6, 7)
+	{-1, -1, 1}, {-1, -1, -1}, {-1, 1, -1}, {-1, 1, 1}, // left (8, 9, 10, 11)
+	{1, -1, 1}, {1, -1, -1}, {1, 1, -1}, {1, 1, 1}, // right (12, 13, 14, 15)
+	{-1 , 1, 1}, {1, 1, 1}, {1, 1, -1}, {-1, 1, -1}, // top  (16, 17, 18, 19)
+	{-1, -1, 1}, {1, -1, 1}, {1, -1, -1}, {-1, -1, -1}  // bottom (20, 21, 22, 23)
+};
+float cube_normals[][3] = {
+	{0, 0, 1}, {0, 0, 1}, {0, 0, 1}, {0, 0, 1}, // front
+	{0, 0, -1}, {0, 0, -1}, {0, 0, -1}, {0, 0, -1}, // back
+	{-1, 0, 0}, {-1, 0, 0}, {-1, 0, 0}, {-1, 0, 0}, // left
+	{1, 0, 0}, {1, 0, 0}, {1, 0, 0}, {1, 0, 0}, // right
+	{0, 1, 0}, {0, 1, 0}, {0, 1, 0}, {0, 1, 0}, // top
+	{0, -1, 0}, {0, -1, 0}, {0, -1, 0}, {0, -1, 0}  // bottom
+};
+int cube_triangles[][3] = {
+	{0, 1, 2}, {2, 3, 0}, // front
+	{4, 5, 6}, {6, 7, 4}, // back
+	{8, 9, 10}, {10, 11, 8}, // left
+	{12, 13, 14}, {14, 15, 12}, // right
+	{16, 17, 18}, {18, 19, 16}, // top
+	{20, 21, 22}, {22, 23, 20}  // bottom
+};
 
 const int GRID_SIZE = 32;
+const int COL_SIZE = 4;
 
 enum ParticleType {
 	AIR = 0,
-	WALL = 1,
+	STONE = 1,
 	WATER = 2,
 	SAND = 3,
 	OIL = 4,
@@ -41,13 +66,12 @@ enum ParticleType {
 };
 
 struct ParticleGrid {
-	int grid[GRID_SIZE][GRID_SIZE][GRID_SIZE][2];
+	GLuint grid[GRID_SIZE][GRID_SIZE][GRID_SIZE];
 	ParticleGrid() {
 		for (int i = 0; i < GRID_SIZE; i++)
 			for (int j = 0; j < GRID_SIZE; j++)
 				for (int k = 0; k < GRID_SIZE; k++)
-					for (int l = 0; l < 2; l++)
-						grid[i][j][k][l] = AIR;
+					grid[i][j][k] = AIR;
 	}
 	void writeGrid() {
 		glBindBuffer(GL_SHADER_STORAGE_BUFFER, computeBuffer);
@@ -75,7 +99,7 @@ struct ParticleGrid {
 		for (int i = 0; i < GRID_SIZE; i++) {
 			for (int j = 0; j < GRID_SIZE; j++) {
 				for (int k = 0; k < GRID_SIZE; k++) {
-					printf("[%i %i]", grid[i][j][k][0], grid[i][j][k][1]);
+					printf("%i", grid[i][j][k]);
 				}
 				printf("\n");
 			}
@@ -86,7 +110,7 @@ struct ParticleGrid {
 		// Dispatch compute shader
 		glUseProgram(computeProgram);
 		glBindBuffer(GL_SHADER_STORAGE_BUFFER, computeBuffer);
-		glDispatchCompute((GLuint)GRID_SIZE, (GLuint)GRID_SIZE, (GLuint)GRID_SIZE);
+		glDispatchCompute((GLuint)(GRID_SIZE / COL_SIZE), 1, (GLuint)(GRID_SIZE / COL_SIZE));
 		glMemoryBarrier(GL_SHADER_STORAGE_BARRIER_BIT);
 	}
 	void render() {
@@ -146,26 +170,31 @@ void cpuRenderGrid() {
 	glEnable(GL_DEPTH_TEST);
 	glBindBuffer(GL_ARRAY_BUFFER, tempCubeBuffer);
 	VertexAttribPointer(renderProgram, "point", 3, 0, (void*)0);
+	VertexAttribPointer(renderProgram, "normal", 3, 0, (void*)(sizeof(cube_points)));
 	SetUniform(renderProgram, "persp", camera.persp);
+	SetUniform(renderProgram, "light_pos", lightPos);
 	for (int i = 0; i < GRID_SIZE; i++) {
 		for (int j = 0; j < GRID_SIZE; j++) {
 			for (int k = 0; k < GRID_SIZE; k++) {
-				if (grid.grid[i][j][k][0] != AIR) {
+				if (grid.grid[i][j][k] != AIR) {
 					mat4 scale = Scale((float)(1.0f / GRID_SIZE));
 					mat4 trans = Translate((i - (GRID_SIZE / 2) + 0.5) * (2.0f / GRID_SIZE), (j - (GRID_SIZE / 2) + 0.5) * (2.0f / GRID_SIZE), (k - (GRID_SIZE / 2) + 0.5) * (2.0f / GRID_SIZE));
 					SetUniform(renderProgram, "modelview", camera.modelview * trans * scale);
-					switch (grid.grid[i][j][k][0]) {
+					switch (grid.grid[i][j][k]) {
 					case AIR:
 						SetUniform(renderProgram, "color", vec4(0.0f, 0.0f, 0.0f, 0.05f));
 						break;
-					case WALL:
+					case STONE:
 						SetUniform(renderProgram, "color", vec4(0.1f, 0.1f, 0.1f, 1.0f));
 						break;
 					case WATER:
 						SetUniform(renderProgram, "color", vec4(0.1f, 0.1f, 0.7f, 1.0f));
 						break;
+					case SAND:
+						SetUniform(renderProgram, "color", vec4(0.906f, 0.702f, 0.498f, 1.0f));
+						break;
 					}
-					glDrawElements(GL_TRIANGLE_STRIP, 14, GL_UNSIGNED_INT, cube_triangle_strip);
+					glDrawElements(GL_TRIANGLES, 36, GL_UNSIGNED_INT, cube_triangles);
 				}
 			}
 		}
@@ -175,7 +204,10 @@ void cpuRenderGrid() {
 void LoadBuffers() {
 	glGenBuffers(1, &tempCubeBuffer);
 	glBindBuffer(GL_ARRAY_BUFFER, tempCubeBuffer);
-	glBufferData(GL_ARRAY_BUFFER, sizeof(cube_points), cube_points, GL_STATIC_DRAW);
+	size_t size = sizeof(cube_points) + sizeof(cube_normals);
+	glBufferData(GL_ARRAY_BUFFER, size, NULL, GL_STATIC_DRAW);
+	glBufferSubData(GL_ARRAY_BUFFER, 0, sizeof(cube_points), cube_points);
+	glBufferSubData(GL_ARRAY_BUFFER, sizeof(cube_points), sizeof(cube_normals), cube_normals);
 	// Load enclosing cube buffer into GPU
 	cube.loadBuffer();
 	// Generate compute shader buffer
@@ -216,14 +248,20 @@ int main() {
 	glfwWindowHint(GLFW_SAMPLES, 4);
 	InitializeCallbacks(window);
 	glfwSwapInterval(1);
+	int frame = 0;
 	while (!glfwWindowShouldClose(window)) {
 		grid.compute();
 		grid.readGrid();
-		grid.grid[4][31][4][0] = WATER; // debug
-		grid.writeGrid();
+		if (frame % 4 == 0) {
+			int x = (int)round(rand_float() * GRID_SIZE); // d
+			int z = (int)round(rand_float() * GRID_SIZE); // d 
+			grid.grid[16][31][16] = SAND; // d
+			grid.writeGrid();
+		}
 		Display();
 		glfwPollEvents();
 		glfwSwapBuffers(window);
+		frame++;
 	}
 	UnloadBuffers();
 	glfwDestroyWindow(window);
