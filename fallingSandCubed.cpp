@@ -67,6 +67,7 @@ enum ParticleType {
 
 struct ParticleGrid {
 	GLuint grid[GRID_SIZE][GRID_SIZE][GRID_SIZE];
+	GLuint tex = 0;
 	ParticleGrid() {
 		for (int i = 0; i < GRID_SIZE; i++)
 			for (int j = 0; j < GRID_SIZE; j++)
@@ -74,25 +75,47 @@ struct ParticleGrid {
 					grid[i][j][k] = AIR;
 	}
 	void writeGrid() {
+		/*
 		glBindBuffer(GL_SHADER_STORAGE_BUFFER, computeBuffer);
 		GLvoid* buf = glMapBuffer(GL_SHADER_STORAGE_BUFFER, GL_WRITE_ONLY);
 		memcpy(buf, &grid, sizeof(grid));
 		glUnmapBuffer(GL_SHADER_STORAGE_BUFFER);
+		*/
+		glActiveTexture(GL_TEXTURE0);
+		glBindTexture(GL_TEXTURE_3D, tex);
+		glTexImage3D(GL_TEXTURE_3D, 0, GL_RED, GRID_SIZE, GRID_SIZE, GRID_SIZE, 0, GL_RED_INTEGER, GL_UNSIGNED_INT, grid);
 	}
 	void readGrid() {
+		/*
 		glBindBuffer(GL_SHADER_STORAGE_BUFFER, computeBuffer);
 		glGetBufferSubData(GL_SHADER_STORAGE_BUFFER, 0, sizeof(grid), &grid);
+		*/
+		glActiveTexture(GL_TEXTURE0);
+		glBindTexture(GL_TEXTURE_3D, tex);
+		glGetTexImage(GL_TEXTURE_3D, 0, GL_RED, GL_UNSIGNED_INT, &grid);
 	}
 	void loadBuffer() {
+		/*
 		glGenBuffers(1, &computeBuffer);
 		glBindBuffer(GL_SHADER_STORAGE_BUFFER, computeBuffer);
 		glBufferData(GL_SHADER_STORAGE_BUFFER, sizeof(grid), NULL, GL_DYNAMIC_COPY);
 		writeGrid();
-		glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 0, computeBuffer);
+		glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 0, computeBuffer); 
+		*/
+		glEnable(GL_TEXTURE_3D);
+		glGenTextures(1, &tex);
+		glActiveTexture(GL_TEXTURE0);
+		glBindTexture(GL_TEXTURE_3D, tex);
+		glTexImage3D(GL_TEXTURE_3D, 0, GL_RED, GRID_SIZE, GRID_SIZE, GRID_SIZE, 0, GL_RED_INTEGER, GL_UNSIGNED_INT, NULL);
 	}
 	void unloadBuffer() {
+		/*
 		glBindBuffer(GL_SHADER_STORAGE_BUFFER, 0);
-		glDeleteBuffers(1, &computeBuffer);
+		glDeleteBuffers(1, &computeBuffer); 
+		*/
+		glActiveTexture(GL_TEXTURE0);
+		glBindBuffer(GL_TEXTURE_3D, 0);
+		glDeleteTextures(1, &tex);
 	}
 	void printGrid() {
 		readGrid();
@@ -109,9 +132,15 @@ struct ParticleGrid {
 	void compute() {
 		// Dispatch compute shader
 		glUseProgram(computeProgram);
-		glBindBuffer(GL_SHADER_STORAGE_BUFFER, computeBuffer);
+		//glBindBuffer(GL_SHADER_STORAGE_BUFFER, computeBuffer);
+		glActiveTexture(GL_TEXTURE0);
+		glBindTexture(GL_TEXTURE_3D, tex);
+		//glBindImageTexture(0, tex, 0, GL_TRUE, 0, GL_READ_WRITE, GL_RED);
+		SetUniform(computeProgram, "grid", (int)tex);
 		glDispatchCompute((GLuint)(GRID_SIZE / COL_SIZE), 1, (GLuint)(GRID_SIZE / COL_SIZE));
-		glMemoryBarrier(GL_SHADER_STORAGE_BARRIER_BIT);
+		//glMemoryBarrier(GL_SHADER_STORAGE_BARRIER_BIT);
+		glMemoryBarrier(GL_SHADER_IMAGE_ACCESS_BARRIER_BIT);
+		glMemoryBarrier(GL_ALL_BARRIER_BITS);
 	}
 	void render() {
 		// Send necessary data to tess shaders
@@ -249,14 +278,24 @@ int main() {
 	InitializeCallbacks(window);
 	glfwSwapInterval(1);
 	int frame = 0;
+	int x = 0;
+	int z = 0;
 	while (!glfwWindowShouldClose(window)) {
 		grid.compute();
 		grid.readGrid();
 		if (frame % 4 == 0) {
-			int x = (int)round(rand_float() * GRID_SIZE); // d
-			int z = (int)round(rand_float() * GRID_SIZE); // d 
-			grid.grid[16][31][16] = SAND; // d
+			//int x = (int)round(rand_float() * GRID_SIZE); // d
+			//int z = (int)round(rand_float() * GRID_SIZE); // d
+			grid.grid[x][31][z] = SAND; // d
 			grid.writeGrid();
+			x++;
+			if (x >= 32) {
+				x = 0;
+				z++;
+				if (z >= 32) {
+					z = 0;
+				}
+			}
 		}
 		Display();
 		glfwPollEvents();

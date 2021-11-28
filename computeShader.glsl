@@ -5,9 +5,12 @@ const int COL_SIZE = 4;
 const int SHUFFLE_ITERS = 4;
 
 layout(local_size_x = 1, local_size_y = 1, local_size_z = 1) in;
+/*
 layout(std430, binding=0) buffer particle_data {
 	uint grid[GRID_SIZE][GRID_SIZE][GRID_SIZE];
-}; 
+};
+*/
+layout (r8ui) uniform uimage3D grid;
 
 // Particle types
 const int P_AIR = 0;
@@ -68,27 +71,33 @@ bool isGas(uint p) {
 }
 
 void processLiquids(uint x, uint y, uint z) {
+	if (y > 0) {
+		
+	}
+}
 
+void swap(uint x1, uint y1, uint z1, uint x2, uint y2, uint z2) {
+	uint a = imageLoad(grid, ivec3(x1, y1, z1)).r;
+	uint b = imageLoad(grid, ivec3(x2, y2, z2)).r;
+	imageStore(grid, ivec3(x2, y2, z2), uvec4(a, 0, 0, 0));
+	imageStore(grid, ivec3(x1, y1, z1), uvec4(b, 0, 0, 0));
 }
 
 void processMovableSolids(uint x, uint y, uint z) {
 	if (y > 0) {
 		// Try to move down
-		uint np = grid[x][y-1][z];
+		uint np = imageLoad(grid, ivec3(x, y-1, z)).r;
 		if (np == P_AIR || isLiquid(np) || isGas(np)) {
-			uint p = grid[x][y-1][z];
-			grid[x][y-1][z] = grid[x][y][z];
-			grid[x][y][z] = p;
+			swap(x, y, z, x, y-1, z);
 			return;
 		}
 		// Else, move diagonal
-		for (int nx = -1; nx <= 1; nx++) {
-			for (int nz = -1; nz <= 1; nz++) {
+		for (uint nx = -1; nx <= 1; nx++) {
+			for (uint nz = -1; nz <= 1; nz++) {
 				if ((nx != 0 || nz != 0) && x + nx < GRID_SIZE && x + nx > 0 && z + nz < GRID_SIZE && z + nz > 0) {
-					uint np = grid[x + nx][y-1][z + nz];
+					uint np = imageLoad(grid, ivec3(x + nx, y - 1, z + nz)).r;
 					if (np == P_AIR || isLiquid(np) || isGas(np)) {
-						grid[x + nx][y-1][z + nz] = grid[x][y][z];
-						grid[x][y][z] = P_AIR;
+						swap(x + nx, y - 1, z + nz, x, y, z);
 						return;
 					}
 				}
@@ -121,7 +130,7 @@ void main() {
 				uint x = rowX[xi] + (COL_SIZE * x_offset);
 				uint z = rowZ[zi] + (COL_SIZE * z_offset);
 				// Process particle at x,y,z
-				uint p = grid[x][y][z];
+				uint p = imageLoad(grid, ivec3(x, y, z)).r;
 				if (isLiquid(p)) {
 					processLiquids(x, y, z);
 				} else if (isMovableSolid(p)) {
