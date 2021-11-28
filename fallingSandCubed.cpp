@@ -54,7 +54,7 @@ int cube_triangles[][3] = {
 };
 
 const int GRID_SIZE = 32;
-const int COL_SIZE = 4;
+const int COL_SIZE = 8;
 
 enum ParticleType {
 	AIR = 0,
@@ -105,6 +105,13 @@ struct ParticleGrid {
 			}
 			printf("\n\n\n");
 		}
+	}
+	void clear() {
+		for (int i = 0; i < GRID_SIZE; i++)
+			for (int j = 0; j < GRID_SIZE; j++)
+				for (int k = 0; k < GRID_SIZE; k++)
+					grid[i][j][k] = AIR;
+		writeGrid();
 	}
 	void compute() {
 		// Dispatch compute shader
@@ -188,7 +195,7 @@ void cpuRenderGrid() {
 						SetUniform(renderProgram, "color", vec4(0.1f, 0.1f, 0.1f, 1.0f));
 						break;
 					case WATER:
-						SetUniform(renderProgram, "color", vec4(0.1f, 0.1f, 0.7f, 1.0f));
+						SetUniform(renderProgram, "color", vec4(0.1f, 0.1f, 0.7f, 0.5f));
 						break;
 					case SAND:
 						SetUniform(renderProgram, "color", vec4(0.906f, 0.702f, 0.498f, 1.0f));
@@ -198,6 +205,41 @@ void cpuRenderGrid() {
 				}
 			}
 		}
+	}
+}
+
+void WriteSphere(vec3 center, int radius, ParticleType pType) {
+	grid.readGrid();
+	int xmin = center.x - radius; xmin = xmin > 0 ? xmin : 0;
+	int xmax = center.x + radius; xmax = xmax < GRID_SIZE ? xmax : GRID_SIZE - 1;
+	int ymin = center.y - radius; ymin = ymin > 0 ? ymin : 0;
+	int ymax = center.y + radius; ymax = ymax < GRID_SIZE ? ymax : GRID_SIZE - 1;
+	int zmin = center.z - radius; zmin = zmin > 0 ? zmin : 0;
+	int zmax = center.z + radius; zmax = zmax < GRID_SIZE ? ymax : GRID_SIZE - 1;
+	for (int i = xmin; i < xmax; i++) {
+		for (int j = ymin; j < ymax; j++) {
+			for (int k = zmin; k < zmax; k++) {
+				vec3 p = vec3(i, j, k);
+				float p_dist = dist(center, p);
+				if (p_dist <= radius) {
+					grid.grid[i][j][k] = pType;
+				}
+			}
+		}
+	}
+	grid.writeGrid();
+}
+
+// Overriding default camera control callback
+void S_Keyboard(GLFWwindow* window, int key, int scancode, int action, int mods) {
+	if (key == GLFW_KEY_ESCAPE || key == GLFW_KEY_Q) {
+		glfwSetWindowShouldClose(window, GLFW_TRUE);
+	} else if (key == GLFW_KEY_S) {
+		WriteSphere(vec3(16, 28, 16), 3, SAND);
+	} else if (key == GLFW_KEY_D) {
+		WriteSphere(vec3(16, 28, 16), 3, WATER);
+	} else if (key == GLFW_KEY_R) {
+		grid.clear();
 	}
 }
 
@@ -247,17 +289,11 @@ int main() {
 	LoadBuffers();
 	glfwWindowHint(GLFW_SAMPLES, 4);
 	InitializeCallbacks(window);
+	glfwSetKeyCallback(window, S_Keyboard);
 	glfwSwapInterval(1);
 	int frame = 0;
 	while (!glfwWindowShouldClose(window)) {
 		grid.compute();
-		grid.readGrid();
-		if (frame % 4 == 0) {
-			int x = (int)round(rand_float() * GRID_SIZE); // d
-			int z = (int)round(rand_float() * GRID_SIZE); // d 
-			grid.grid[16][31][16] = SAND; // d
-			grid.writeGrid();
-		}
 		Display();
 		glfwPollEvents();
 		glfwSwapBuffers(window);

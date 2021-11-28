@@ -45,7 +45,7 @@ void MouseMove(GLFWwindow* w, double x, double y) {
 }
 
 void MouseWheel(GLFWwindow* w, double ignore, double spin) {
-	camera.MouseWheel(spin > 0, Shift(w));
+	camera.MouseWheel(spin > 0, true);
 }
 
 void InitializeCallbacks(GLFWwindow* w) {

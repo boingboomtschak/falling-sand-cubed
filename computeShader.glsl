@@ -1,7 +1,7 @@
 #version 430
 
 const int GRID_SIZE = 32;
-const int COL_SIZE = 4;
+const int COL_SIZE = 8;
 const int SHUFFLE_ITERS = 4;
 
 layout(local_size_x = 1, local_size_y = 1, local_size_z = 1) in;
@@ -25,7 +25,6 @@ uint rand(vec2 co, uint rmin = 0, uint rmax = 1){
 }
 
 void shuffleRow(inout uint row[COL_SIZE]) {
-	for (uint i = 0; i < COL_SIZE; i++) row[i] = i;
 	for (uint s = 0; s < SHUFFLE_ITERS; s++) {
 		uint a = rand(vec2(float(row[0]), float(row[1])), 0, COL_SIZE);
 		uint b = rand(vec2(float(row[2]), float(row[2])), 0, COL_SIZE);
@@ -67,8 +66,33 @@ bool isGas(uint p) {
 	return false;
 }
 
-void processLiquids(uint x, uint y, uint z) {
+void swap(uint x1, uint y1, uint z1, uint x2, uint y2, uint z2) {
+	uint p = grid[x1][y1][z1];
+	grid[x1][y1][z1] = grid[x2][y2][z2];
+	grid[x2][y2][z2] = p;
+}
 
+void processLiquids(uint x, uint y, uint z) {
+	if (y > 0) {
+		// Try to move down
+		uint np = grid[x][y-1][z];
+		if (np == P_AIR || isGas(np)) {
+			swap(x, y, z, x, y-1, z);
+			return;
+		}
+		// Else, try to move sideways
+		for (int nx = -1; nx <= 1; nx++) {
+			for (int nz = -1; nz <= 1; nz++) {
+				if ((nx != 0 || nz != 0) && x + nx <= GRID_SIZE && x + nx >= 0 && z + nz < GRID_SIZE && z + nz >= 0) {
+					uint np = grid[x + nx][y][z + nz];
+					if (np == P_AIR || isGas(np)) {
+						swap(x, y, z, x + nx, y, z + nz);
+						return;
+					}
+				}
+			}
+		}
+	}
 }
 
 void processMovableSolids(uint x, uint y, uint z) {
@@ -76,19 +100,16 @@ void processMovableSolids(uint x, uint y, uint z) {
 		// Try to move down
 		uint np = grid[x][y-1][z];
 		if (np == P_AIR || isLiquid(np) || isGas(np)) {
-			uint p = grid[x][y-1][z];
-			grid[x][y-1][z] = grid[x][y][z];
-			grid[x][y][z] = p;
+			swap(x, y, z, x, y-1, z);
 			return;
 		}
 		// Else, move diagonal
 		for (int nx = -1; nx <= 1; nx++) {
 			for (int nz = -1; nz <= 1; nz++) {
-				if ((nx != 0 || nz != 0) && x + nx < GRID_SIZE && x + nx > 0 && z + nz < GRID_SIZE && z + nz > 0) {
+				if ((nx != 0 || nz != 0) && x + nx < GRID_SIZE && x + nx >= 0 && z + nz < GRID_SIZE && z + nz >= 0) {
 					uint np = grid[x + nx][y-1][z + nz];
 					if (np == P_AIR || isLiquid(np) || isGas(np)) {
-						grid[x + nx][y-1][z + nz] = grid[x][y][z];
-						grid[x][y][z] = P_AIR;
+						swap(x, y, z, x + nx, y - 1, z + nz);
 						return;
 					}
 				}
@@ -114,6 +135,10 @@ void main() {
 		// Update particles in row in random order
 		uint[COL_SIZE] rowX;
 		uint[COL_SIZE] rowZ;
+		for (uint i = 0; i < COL_SIZE; i++) {
+			rowX[i] = i;
+			rowZ[i] = i;
+		}
 		shuffleRow(rowX);
 		shuffleRow(rowZ);
 		for (uint xi = 0; xi < COL_SIZE; xi++) {
