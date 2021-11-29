@@ -17,21 +17,9 @@ const int P_SAND = 3;
 const int P_OIL = 4;
 const int P_SALT = 5;
 
-uniform int solidFloor = 1;
-
 // Pseudorandom values for more natural processing
 uint rand(vec2 co, uint rmin = 0, uint rmax = 1){
     return uint(round( fract(sin(dot(co, vec2(12.9898, 78.233))) * 43758.5453) * rmax )) + rmin;
-}
-
-void shuffleRow(inout uint row[COL_SIZE]) {
-	for (uint s = 0; s < SHUFFLE_ITERS; s++) {
-		uint a = rand(vec2(float(row[0]), float(row[1])), 0, COL_SIZE - 1);
-		uint b = rand(vec2(float(row[2]), float(row[3])), 0, COL_SIZE - 1);
-		uint c = row[a];
-		row[a] = row[b];
-		row[b] = c;
-	}
 }
 
 bool isLiquid(uint p) {
@@ -136,8 +124,6 @@ void processGases(uint x, uint y, uint z) {
 
 void main() {
 	ivec3 inv = ivec3(gl_GlobalInvocationID);
-	//uint x_offset = inv.x, z_offset = inv.z;
-
 	uint p = grid[inv.x][inv.y][inv.z];
 	if (isLiquid(p)) {
 		processLiquids(inv.x, inv.y, inv.z);
@@ -148,37 +134,5 @@ void main() {
 	} else if (isGas(p)) {
 		processGases(inv.x, inv.y, inv.z);
 	}
-
-	/*
-	// Iterate through rows upwards
-	for (uint y = 0; y < GRID_SIZE; y++) {
-		// Update particles in row in random order
-		uint[COL_SIZE] rowX;
-		uint[COL_SIZE] rowZ;
-		for (uint i = 0; i < COL_SIZE; i++) {
-			rowX[i] = i;
-			rowZ[i] = i;
-		}
-		//shuffleRow(rowX);
-		//shuffleRow(rowZ);
-		for (uint xi = 0; xi < COL_SIZE; xi++) {
-			for (uint zi = 0; zi < COL_SIZE; zi++) {
-				uint x = rowX[xi] + (COL_SIZE * x_offset);
-				uint z = rowZ[zi] + (COL_SIZE * z_offset);
-				// Process particle at x,y,z
-				uint p = grid[x][y][z];
-				if (isLiquid(p)) {
-					processLiquids(x, y, z);
-				} else if (isMovableSolid(p)) {
-					processMovableSolids(x, y, z);
-				} else if(isImmovableSolid(p)) {
-					processImmovableSolids(x, y, z);
-				} else if (isGas(p)) {
-					processGases(x, y, z);
-				}
-			}
-		}
-	}
-	*/
 }
 
