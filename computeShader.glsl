@@ -1,7 +1,7 @@
 #version 430
 
 const int GRID_SIZE = 32;
-const int COL_SIZE = 8;
+const int COL_SIZE = 32;
 const int SHUFFLE_ITERS = 4;
 
 layout(local_size_x = 1, local_size_y = 1, local_size_z = 1) in;
@@ -26,8 +26,8 @@ uint rand(vec2 co, uint rmin = 0, uint rmax = 1){
 
 void shuffleRow(inout uint row[COL_SIZE]) {
 	for (uint s = 0; s < SHUFFLE_ITERS; s++) {
-		uint a = rand(vec2(float(row[0]), float(row[1])), 0, COL_SIZE);
-		uint b = rand(vec2(float(row[2]), float(row[2])), 0, COL_SIZE);
+		uint a = rand(vec2(float(row[0]), float(row[1])), 0, COL_SIZE - 1);
+		uint b = rand(vec2(float(row[2]), float(row[3])), 0, COL_SIZE - 1);
 		uint c = row[a];
 		row[a] = row[b];
 		row[b] = c;
@@ -73,22 +73,22 @@ void swap(uint x1, uint y1, uint z1, uint x2, uint y2, uint z2) {
 }
 
 void processLiquids(uint x, uint y, uint z) {
+	// Try to move down
 	if (y > 0) {
-		// Try to move down
 		uint np = grid[x][y-1][z];
 		if (np == P_AIR || isGas(np)) {
 			swap(x, y, z, x, y-1, z);
 			return;
 		}
-		// Else, try to move sideways
-		for (int nx = -1; nx <= 1; nx++) {
-			for (int nz = -1; nz <= 1; nz++) {
-				if ((nx != 0 || nz != 0) && x + nx <= GRID_SIZE && x + nx >= 0 && z + nz < GRID_SIZE && z + nz >= 0) {
-					uint np = grid[x + nx][y][z + nz];
-					if (np == P_AIR || isGas(np)) {
-						swap(x, y, z, x + nx, y, z + nz);
-						return;
-					}
+	}
+	// Else, try to move sideways
+	for (int nx = 1; nx >= -1; nx--) {
+		for (int nz = 1; nz >= -1; nz--) {
+			if ((nx != 0 || nz != 0) && x + nx < GRID_SIZE && x + nx >= 0 && z + nz < GRID_SIZE && z + nz >= 0) {
+				uint np = grid[x + nx][y][z + nz];
+				if (np == P_AIR || isGas(np)) {
+					swap(x, y, z, x + nx, y, z + nz);
+					return;
 				}
 			}
 		}
@@ -103,7 +103,7 @@ void processMovableSolids(uint x, uint y, uint z) {
 			swap(x, y, z, x, y-1, z);
 			return;
 		}
-		// Else, move diagonal
+		// Else, move diagonal downwards (if possible)
 		for (int nx = -1; nx <= 1; nx++) {
 			for (int nz = -1; nz <= 1; nz++) {
 				if ((nx != 0 || nz != 0) && x + nx < GRID_SIZE && x + nx >= 0 && z + nz < GRID_SIZE && z + nz >= 0) {
@@ -139,8 +139,8 @@ void main() {
 			rowX[i] = i;
 			rowZ[i] = i;
 		}
-		shuffleRow(rowX);
-		shuffleRow(rowZ);
+		//shuffleRow(rowX);
+		//shuffleRow(rowZ);
 		for (uint xi = 0; xi < COL_SIZE; xi++) {
 			for (uint zi = 0; zi < COL_SIZE; zi++) {
 				uint x = rowX[xi] + (COL_SIZE * x_offset);

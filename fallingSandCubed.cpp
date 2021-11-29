@@ -54,7 +54,7 @@ int cube_triangles[][3] = {
 };
 
 const int GRID_SIZE = 32;
-const int COL_SIZE = 8;
+const int COL_SIZE = 32;
 
 enum ParticleType {
 	AIR = 0,
@@ -118,7 +118,8 @@ struct ParticleGrid {
 		glUseProgram(computeProgram);
 		glBindBuffer(GL_SHADER_STORAGE_BUFFER, computeBuffer);
 		glDispatchCompute((GLuint)(GRID_SIZE / COL_SIZE), 1, (GLuint)(GRID_SIZE / COL_SIZE));
-		glMemoryBarrier(GL_SHADER_STORAGE_BARRIER_BIT);
+		//glMemoryBarrier(GL_SHADER_STORAGE_BARRIER_BIT);
+		glMemoryBarrier(GL_ALL_BARRIER_BITS);
 	}
 	void render() {
 		// Send necessary data to tess shaders
