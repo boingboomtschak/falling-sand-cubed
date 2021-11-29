@@ -117,7 +117,8 @@ struct ParticleGrid {
 		// Dispatch compute shader
 		glUseProgram(computeProgram);
 		glBindBuffer(GL_SHADER_STORAGE_BUFFER, computeBuffer);
-		glDispatchCompute((GLuint)(GRID_SIZE / COL_SIZE), 1, (GLuint)(GRID_SIZE / COL_SIZE));
+		//glDispatchCompute((GLuint)(GRID_SIZE / COL_SIZE), 1, (GLuint)(GRID_SIZE / COL_SIZE));
+		glDispatchCompute(GRID_SIZE, GRID_SIZE, GRID_SIZE);
 		//glMemoryBarrier(GL_SHADER_STORAGE_BARRIER_BIT);
 		glMemoryBarrier(GL_ALL_BARRIER_BITS);
 	}

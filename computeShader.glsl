@@ -66,19 +66,17 @@ bool isGas(uint p) {
 	return false;
 }
 
-void swap(uint x1, uint y1, uint z1, uint x2, uint y2, uint z2) {
-	uint p = grid[x1][y1][z1];
-	grid[x1][y1][z1] = grid[x2][y2][z2];
-	grid[x2][y2][z2] = p;
-}
-
 void processLiquids(uint x, uint y, uint z) {
+	uint p = grid[x][y][z];
 	// Try to move down
 	if (y > 0) {
 		uint np = grid[x][y-1][z];
 		if (np == P_AIR || isGas(np)) {
-			swap(x, y, z, x, y-1, z);
-			return;
+			uint wp = atomicCompSwap(grid[x][y-1][z], np, p);
+			if (wp == np) {
+				atomicExchange(grid[x][y][z], np);
+				return;
+			}
 		}
 	}
 	// Else, try to move sideways
@@ -87,8 +85,11 @@ void processLiquids(uint x, uint y, uint z) {
 			if ((nx != 0 || nz != 0) && x + nx < GRID_SIZE && x + nx >= 0 && z + nz < GRID_SIZE && z + nz >= 0) {
 				uint np = grid[x + nx][y][z + nz];
 				if (np == P_AIR || isGas(np)) {
-					swap(x, y, z, x + nx, y, z + nz);
-					return;
+					uint wp = atomicCompSwap(grid[x + nx][y][z + nz], np, p);
+					if (wp == np) {
+						atomicExchange(grid[x][y][z], np);
+						return;
+					}
 				}
 			}
 		}
@@ -96,12 +97,16 @@ void processLiquids(uint x, uint y, uint z) {
 }
 
 void processMovableSolids(uint x, uint y, uint z) {
+	uint p = grid[x][y][z];
 	if (y > 0) {
 		// Try to move down
 		uint np = grid[x][y-1][z];
 		if (np == P_AIR || isLiquid(np) || isGas(np)) {
-			swap(x, y, z, x, y-1, z);
-			return;
+			uint wp = atomicCompSwap(grid[x][y-1][z], np, p);
+			if (wp == np) {
+				atomicExchange(grid[x][y][z], np);
+				return;
+			}
 		}
 		// Else, move diagonal downwards (if possible)
 		for (int nx = -1; nx <= 1; nx++) {
@@ -109,8 +114,11 @@ void processMovableSolids(uint x, uint y, uint z) {
 				if ((nx != 0 || nz != 0) && x + nx < GRID_SIZE && x + nx >= 0 && z + nz < GRID_SIZE && z + nz >= 0) {
 					uint np = grid[x + nx][y-1][z + nz];
 					if (np == P_AIR || isLiquid(np) || isGas(np)) {
-						swap(x, y, z, x + nx, y - 1, z + nz);
-						return;
+						uint wp = atomicCompSwap(grid[x + nx][y - 1][z + nz], np, p);
+						if (wp == np) {
+							atomicExchange(grid[x][y][z], np);
+							return;
+						}
 					}
 				}
 			}
@@ -128,8 +136,20 @@ void processGases(uint x, uint y, uint z) {
 
 void main() {
 	ivec3 inv = ivec3(gl_GlobalInvocationID);
-	uint x_offset = inv.x, z_offset = inv.z;
+	//uint x_offset = inv.x, z_offset = inv.z;
 
+	uint p = grid[inv.x][inv.y][inv.z];
+	if (isLiquid(p)) {
+		processLiquids(inv.x, inv.y, inv.z);
+	} else if (isMovableSolid(p)) {
+		processMovableSolids(inv.x, inv.y, inv.z);
+	} else if(isImmovableSolid(p)) {
+		processImmovableSolids(inv.x, inv.y, inv.z);
+	} else if (isGas(p)) {
+		processGases(inv.x, inv.y, inv.z);
+	}
+
+	/*
 	// Iterate through rows upwards
 	for (uint y = 0; y < GRID_SIZE; y++) {
 		// Update particles in row in random order
@@ -159,5 +179,6 @@ void main() {
 			}
 		}
 	}
+	*/
 }
 
