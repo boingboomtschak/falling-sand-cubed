@@ -10,7 +10,8 @@ layout(std430, binding=0) buffer particle_data {
 	uint grid[GRID_SIZE][GRID_SIZE][GRID_SIZE];
 };
 */
-layout (r8ui) uniform uimage3D grid;
+layout (r32ui, binding=0) uniform uimage3D srcGrid;
+layout (r32ui, binding=1) uniform uimage3D dstGrid;
 
 // Particle types
 const int P_AIR = 0;
@@ -76,34 +77,35 @@ void processLiquids(uint x, uint y, uint z) {
 	}
 }
 
-void swap(uint x1, uint y1, uint z1, uint x2, uint y2, uint z2) {
-	uint a = imageLoad(grid, ivec3(x1, y1, z1)).r;
-	uint b = imageLoad(grid, ivec3(x2, y2, z2)).r;
-	imageStore(grid, ivec3(x2, y2, z2), uvec4(a, 0, 0, 0));
-	imageStore(grid, ivec3(x1, y1, z1), uvec4(b, 0, 0, 0));
-}
-
 void processMovableSolids(uint x, uint y, uint z) {
+	uint p = imageLoad(srcGrid, ivec3(x, y, z)).r;
 	if (y > 0) {
 		// Try to move down
-		uint np = imageLoad(grid, ivec3(x, y-1, z)).r;
+		uint np = imageLoad(srcGrid, ivec3(x, y-1, z)).r;
 		if (np == P_AIR || isLiquid(np) || isGas(np)) {
-			swap(x, y, z, x, y-1, z);
-			return;
+			uint wp = imageAtomicCompSwap(dstGrid, ivec3(x, y-1, z), np, p);
+			if (wp == np) {
+				imageAtomicExchange(srcGrid, ivec3(x, y, z), P_AIR);
+				return;
+			}
 		}
 		// Else, move diagonal
 		for (uint nx = -1; nx <= 1; nx++) {
 			for (uint nz = -1; nz <= 1; nz++) {
 				if ((nx != 0 || nz != 0) && x + nx < GRID_SIZE && x + nx > 0 && z + nz < GRID_SIZE && z + nz > 0) {
-					uint np = imageLoad(grid, ivec3(x + nx, y - 1, z + nz)).r;
+					uint np = imageLoad(srcGrid, ivec3(x + nx, y - 1, z + nz)).r;
 					if (np == P_AIR || isLiquid(np) || isGas(np)) {
-						swap(x + nx, y - 1, z + nz, x, y, z);
-						return;
+						uint wp = imageAtomicCompSwap(dstGrid, ivec3(x + nx, y-1, z + nz), np, p);
+						if (wp == np) {
+							imageAtomicExchange(srcGrid, ivec3(x, y, z), np);
+							return;
+						}
 					}
 				}
 			}
 		}
 	}
+	imageAtomicExchange(dstGrid, ivec3(x, y, z), p);
 }
 
 void processImmovableSolids(uint x, uint y, uint z) {
@@ -116,21 +118,26 @@ void processGases(uint x, uint y, uint z) {
 
 void main() {
 	ivec3 inv = ivec3(gl_GlobalInvocationID);
-	uint x_offset = inv.x, z_offset = inv.z;
-
+	//uint x_offset = inv.x, z_offset = inv.z;
+	uint p = imageLoad(srcGrid, ivec3(inv.x, inv.y, inv.z)).r;
+	if (isLiquid(p)) {
+		processLiquids(inv.x, inv.y, inv.z);
+	} else if (isMovableSolid(p)) {
+		processMovableSolids(inv.x, inv.y, inv.z);
+	} else if(isImmovableSolid(p)) {
+		processImmovableSolids(inv.x, inv.y, inv.z);
+	} else if (isGas(p)) {
+		processGases(inv.x, inv.y, inv.z);
+	}
+	/*
 	// Iterate through rows upwards
 	for (uint y = 0; y < GRID_SIZE; y++) {
-		// Update particles in row in random order
-		uint[COL_SIZE] rowX;
-		uint[COL_SIZE] rowZ;
-		shuffleRow(rowX);
-		shuffleRow(rowZ);
-		for (uint xi = 0; xi < COL_SIZE; xi++) {
-			for (uint zi = 0; zi < COL_SIZE; zi++) {
-				uint x = rowX[xi] + (COL_SIZE * x_offset);
-				uint z = rowZ[zi] + (COL_SIZE * z_offset);
+		for (uint x = 0; x < COL_SIZE; x++) {
+			for (uint z = 0; z < COL_SIZE; z++) {
+				x = x + (COL_SIZE * x_offset);
+				z = z + (COL_SIZE * z_offset);
 				// Process particle at x,y,z
-				uint p = imageLoad(grid, ivec3(x, y, z)).r;
+				uint p = imageLoad(srcGrid, ivec3(x, y, z)).r;
 				if (isLiquid(p)) {
 					processLiquids(x, y, z);
 				} else if (isMovableSolid(p)) {
@@ -143,5 +150,6 @@ void main() {
 			}
 		}
 	}
+	*/
 }
 

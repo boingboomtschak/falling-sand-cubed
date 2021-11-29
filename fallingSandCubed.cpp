@@ -67,7 +67,7 @@ enum ParticleType {
 
 struct ParticleGrid {
 	GLuint grid[GRID_SIZE][GRID_SIZE][GRID_SIZE];
-	GLuint tex = 0;
+	GLuint srcTex = 0, dstTex = 0;
 	ParticleGrid() {
 		for (int i = 0; i < GRID_SIZE; i++)
 			for (int j = 0; j < GRID_SIZE; j++)
@@ -81,18 +81,30 @@ struct ParticleGrid {
 		memcpy(buf, &grid, sizeof(grid));
 		glUnmapBuffer(GL_SHADER_STORAGE_BUFFER);
 		*/
+		printf("WRITE 1\n");
+		PrintGLErrors();
 		glActiveTexture(GL_TEXTURE0);
-		glBindTexture(GL_TEXTURE_3D, tex);
-		glTexImage3D(GL_TEXTURE_3D, 0, GL_RED, GRID_SIZE, GRID_SIZE, GRID_SIZE, 0, GL_RED_INTEGER, GL_UNSIGNED_INT, grid);
+		glBindTexture(GL_TEXTURE_3D, srcTex);
+		printf("WRITE 2\n");
+		PrintGLErrors();
+		glTexImage3D(GL_TEXTURE_3D, 0, GL_R32UI, GRID_SIZE, GRID_SIZE, GRID_SIZE, 0, GL_RED_INTEGER, GL_UNSIGNED_INT, &grid);
+		printf("WRITE 3\n");
+		PrintGLErrors();
 	}
 	void readGrid() {
 		/*
 		glBindBuffer(GL_SHADER_STORAGE_BUFFER, computeBuffer);
 		glGetBufferSubData(GL_SHADER_STORAGE_BUFFER, 0, sizeof(grid), &grid);
 		*/
+		printf("READ 1\n");
+		PrintGLErrors();
 		glActiveTexture(GL_TEXTURE0);
-		glBindTexture(GL_TEXTURE_3D, tex);
+		glBindTexture(GL_TEXTURE_3D, srcTex);
+		printf("READ 2\n");
+		PrintGLErrors();
 		glGetTexImage(GL_TEXTURE_3D, 0, GL_RED, GL_UNSIGNED_INT, &grid);
+		printf("READ 3\n");
+		PrintGLErrors();
 	}
 	void loadBuffer() {
 		/*
@@ -103,10 +115,13 @@ struct ParticleGrid {
 		glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 0, computeBuffer); 
 		*/
 		glEnable(GL_TEXTURE_3D);
-		glGenTextures(1, &tex);
+		glGenTextures(1, &srcTex);
 		glActiveTexture(GL_TEXTURE0);
-		glBindTexture(GL_TEXTURE_3D, tex);
-		glTexImage3D(GL_TEXTURE_3D, 0, GL_RED, GRID_SIZE, GRID_SIZE, GRID_SIZE, 0, GL_RED_INTEGER, GL_UNSIGNED_INT, NULL);
+		glBindTexture(GL_TEXTURE_3D, srcTex);
+		glTexImage3D(GL_TEXTURE_3D, 0, GL_R32UI, GRID_SIZE, GRID_SIZE, GRID_SIZE, 0, GL_RED_INTEGER, GL_UNSIGNED_INT, NULL);
+		glActiveTexture(GL_TEXTURE1);
+		glBindTexture(GL_TEXTURE_3D, dstTex);
+		glTexImage3D(GL_TEXTURE_3D, 0, GL_R32UI, GRID_SIZE, GRID_SIZE, GRID_SIZE, 0, GL_RED_INTEGER, GL_UNSIGNED_INT, NULL);
 	}
 	void unloadBuffer() {
 		/*
@@ -115,7 +130,10 @@ struct ParticleGrid {
 		*/
 		glActiveTexture(GL_TEXTURE0);
 		glBindBuffer(GL_TEXTURE_3D, 0);
-		glDeleteTextures(1, &tex);
+		glDeleteTextures(1, &srcTex);
+		glActiveTexture(GL_TEXTURE1);
+		glBindBuffer(GL_TEXTURE_3D, 0);
+		glDeleteTextures(1, &dstTex);
 	}
 	void printGrid() {
 		readGrid();
@@ -134,13 +152,15 @@ struct ParticleGrid {
 		glUseProgram(computeProgram);
 		//glBindBuffer(GL_SHADER_STORAGE_BUFFER, computeBuffer);
 		glActiveTexture(GL_TEXTURE0);
-		glBindTexture(GL_TEXTURE_3D, tex);
+		glBindTexture(GL_TEXTURE_3D, srcTex);
+		glActiveTexture(GL_TEXTURE1);
+		glBindTexture(GL_TEXTURE_3D, dstTex);
 		//glBindImageTexture(0, tex, 0, GL_TRUE, 0, GL_READ_WRITE, GL_RED);
-		SetUniform(computeProgram, "grid", (int)tex);
-		glDispatchCompute((GLuint)(GRID_SIZE / COL_SIZE), 1, (GLuint)(GRID_SIZE / COL_SIZE));
+		glDispatchCompute(GRID_SIZE, GRID_SIZE, GRID_SIZE);
 		//glMemoryBarrier(GL_SHADER_STORAGE_BARRIER_BIT);
-		glMemoryBarrier(GL_SHADER_IMAGE_ACCESS_BARRIER_BIT);
 		glMemoryBarrier(GL_ALL_BARRIER_BITS);
+		// Copy dstTex to srcTex
+		glCopyImageSubData(dstTex, 1, 0, 0, 0, 0, srcTex, 0, 0, 0, 0, 0, GRID_SIZE, GRID_SIZE, GRID_SIZE);
 	}
 	void render() {
 		// Send necessary data to tess shaders
