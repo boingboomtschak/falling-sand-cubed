@@ -20,40 +20,18 @@ GLuint computeProgram = 0, srcBuffer = 0, dstBuffer = 0;
 GLuint renderProgram = 0;
 GLuint tempCubeBuffer = 0;
 
+const int GRID_SIZE = 128;
+
 int win_width = 800, win_height = 800;
 
 Camera camera((float)win_width / win_height, vec3(0, 0, 0), vec3(0, 0, -5));
 vec3 lightPos = vec3(1, 1, 0);
 dCube cube;
+vec3 dropperPos = vec3((int)(GRID_SIZE / 2), (int)(GRID_SIZE - 3), (int)(GRID_SIZE / 2));
 
-//float cube_points[][3] = { {1, 1, 1}, {-1, 1, 1}, {1, 1, -1}, {-1, 1, -1}, {1, -1, 1}, {-1, -1, 1}, {-1, -1, -1}, {1, -1, -1} };
-//int cube_triangle_strip[] = { 3, 2, 6, 7, 4, 2, 0, 3, 1, 6, 5, 4, 1, 0 };
-float cube_points[][3] = {
-	{-1, -1, 1}, {1, -1, 1}, {1, 1, 1}, {-1, 1, 1}, // front (0, 1, 2, 3)
-	{-1, -1, -1}, {1, -1, -1}, {1, 1, -1}, {-1, 1, -1}, // back (4, 5, 6, 7)
-	{-1, -1, 1}, {-1, -1, -1}, {-1, 1, -1}, {-1, 1, 1}, // left (8, 9, 10, 11)
-	{1, -1, 1}, {1, -1, -1}, {1, 1, -1}, {1, 1, 1}, // right (12, 13, 14, 15)
-	{-1 , 1, 1}, {1, 1, 1}, {1, 1, -1}, {-1, 1, -1}, // top  (16, 17, 18, 19)
-	{-1, -1, 1}, {1, -1, 1}, {1, -1, -1}, {-1, -1, -1}  // bottom (20, 21, 22, 23)
-};
-float cube_normals[][3] = {
-	{0, 0, 1}, {0, 0, 1}, {0, 0, 1}, {0, 0, 1}, // front
-	{0, 0, -1}, {0, 0, -1}, {0, 0, -1}, {0, 0, -1}, // back
-	{-1, 0, 0}, {-1, 0, 0}, {-1, 0, 0}, {-1, 0, 0}, // left
-	{1, 0, 0}, {1, 0, 0}, {1, 0, 0}, {1, 0, 0}, // right
-	{0, 1, 0}, {0, 1, 0}, {0, 1, 0}, {0, 1, 0}, // top
-	{0, -1, 0}, {0, -1, 0}, {0, -1, 0}, {0, -1, 0}  // bottom
-};
-int cube_triangles[][3] = {
-	{0, 1, 2}, {2, 3, 0}, // front
-	{4, 5, 6}, {6, 7, 4}, // back
-	{8, 9, 10}, {10, 11, 8}, // left
-	{12, 13, 14}, {14, 15, 12}, // right
-	{16, 17, 18}, {18, 19, 16}, // top
-	{20, 21, 22}, {22, 23, 20}  // bottom
-};
-
-const int GRID_SIZE = 32;
+float cube_points[][3] = { {-1, -1, 1}, {1, -1, 1}, {1, 1, 1}, {-1, 1, 1}, {-1, -1, -1}, {1, -1, -1}, {1, 1, -1}, {-1, 1, -1}, {-1, -1, 1}, {-1, -1, -1}, {-1, 1, -1}, {-1, 1, 1}, {1, -1, 1}, {1, -1, -1}, {1, 1, -1}, {1, 1, 1}, {-1 , 1, 1}, {1, 1, 1}, {1, 1, -1}, {-1, 1, -1}, {-1, -1, 1}, {1, -1, 1}, {1, -1, -1}, {-1, -1, -1} };
+float cube_normals[][3] = { {0, 0, 1}, {0, 0, 1}, {0, 0, 1}, {0, 0, 1}, {0, 0, -1}, {0, 0, -1}, {0, 0, -1}, {0, 0, -1}, {-1, 0, 0}, {-1, 0, 0}, {-1, 0, 0}, {-1, 0, 0}, {1, 0, 0}, {1, 0, 0}, {1, 0, 0}, {1, 0, 0}, {0, 1, 0}, {0, 1, 0}, {0, 1, 0}, {0, 1, 0}, {0, -1, 0}, {0, -1, 0}, {0, -1, 0}, {0, -1, 0} };
+int cube_triangles[][3] = { {0, 1, 2}, {2, 3, 0}, {4, 5, 6}, {6, 7, 4}, {8, 9, 10}, {10, 11, 8}, {12, 13, 14}, {14, 15, 12}, {16, 17, 18}, {18, 19, 16}, {20, 21, 22}, {22, 23, 20} };
 
 enum ParticleType {
 	AIR = 0,
@@ -210,6 +188,23 @@ void cpuRenderGrid() {
 	}
 }
 
+void renderDropper() {
+	glUseProgram(renderProgram);
+	glEnable(GL_BLEND);
+	glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+	glEnable(GL_DEPTH_TEST);
+	glBindBuffer(GL_ARRAY_BUFFER, tempCubeBuffer);
+	VertexAttribPointer(renderProgram, "point", 3, 0, (void*)0);
+	VertexAttribPointer(renderProgram, "normal", 3, 0, (void*)(sizeof(cube_points)));
+	SetUniform(renderProgram, "persp", camera.persp);
+	SetUniform(renderProgram, "light_pos", lightPos);
+	mat4 scale = Scale((float)(1.0f / GRID_SIZE));
+	mat4 trans = Translate((dropperPos.x - (GRID_SIZE / 2) + 0.5) * (2.0f / GRID_SIZE), (dropperPos.y - (GRID_SIZE / 2) + 0.5) * (2.0f / GRID_SIZE), (dropperPos.z - (GRID_SIZE / 2) + 0.5) * (2.0f / GRID_SIZE));
+	SetUniform(renderProgram, "modelview", camera.modelview * trans * scale);
+	SetUniform(renderProgram, "color", vec4(1.0f, 0.0f, 0.0f, 1.0f));
+	glDrawElements(GL_TRIANGLES, 36, GL_UNSIGNED_INT, cube_triangles);
+}
+
 void WriteSphere(vec3 center, int radius, ParticleType pType, float spawnProb) {
 	grid.readGrid();
 	int xmin = center.x - radius; xmin = xmin > 0 ? xmin : 0;
@@ -239,11 +234,19 @@ void S_Keyboard(GLFWwindow* window, int key, int scancode, int action, int mods)
 	if (key == GLFW_KEY_ESCAPE || key == GLFW_KEY_Q) {
 		glfwSetWindowShouldClose(window, GLFW_TRUE);
 	} else if (key == GLFW_KEY_S) {
-		WriteSphere(vec3(16, 28, 16), 3, SAND, 0.8);
+		WriteSphere(dropperPos, 3, SAND, 0.8);
 	} else if (key == GLFW_KEY_D) {
-		WriteSphere(vec3(16, 28, 16), 3, WATER, 0.8);
+		WriteSphere(dropperPos, 3, WATER, 0.8);
 	} else if (key == GLFW_KEY_R) {
 		grid.clear();
+	} else if (key == GLFW_KEY_UP) {
+		dropperPos.x += 1;
+	} else if (key == GLFW_KEY_DOWN) {
+		dropperPos.x -= 1;
+	} else if (key == GLFW_KEY_RIGHT) {
+		dropperPos.z += 1;
+	} else if (key == GLFW_KEY_LEFT) {
+		dropperPos.z -= 1;
 	}
 }
 
@@ -273,6 +276,7 @@ void Display() {
 	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 	cube.display(camera);
 	cpuRenderGrid();
+	renderDropper();
 	glFlush();
 }
 
