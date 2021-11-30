@@ -16,7 +16,7 @@
 
 using std::vector;
 
-GLuint computeProgram = 0, computeBuffer = 0;
+GLuint computeProgram = 0, srcBuffer = 0, dstBuffer = 0;
 GLuint renderProgram = 0;
 GLuint tempCubeBuffer = 0;
 
@@ -73,37 +73,30 @@ struct ParticleGrid {
 					grid[i][j][k] = AIR;
 	}
 	void writeGrid() {
-		glBindBuffer(GL_SHADER_STORAGE_BUFFER, computeBuffer);
+		glBindBuffer(GL_SHADER_STORAGE_BUFFER, srcBuffer);
 		GLvoid* buf = glMapBuffer(GL_SHADER_STORAGE_BUFFER, GL_WRITE_ONLY);
 		memcpy(buf, &grid, sizeof(grid));
 		glUnmapBuffer(GL_SHADER_STORAGE_BUFFER);
 	}
 	void readGrid() {
-		glBindBuffer(GL_SHADER_STORAGE_BUFFER, computeBuffer);
+		glBindBuffer(GL_SHADER_STORAGE_BUFFER, srcBuffer);
 		glGetBufferSubData(GL_SHADER_STORAGE_BUFFER, 0, sizeof(grid), &grid);
 	}
 	void loadBuffer() {
-		glGenBuffers(1, &computeBuffer);
-		glBindBuffer(GL_SHADER_STORAGE_BUFFER, computeBuffer);
+		// Create and write srcBuffer
+		glGenBuffers(1, &srcBuffer);
+		glBindBuffer(GL_SHADER_STORAGE_BUFFER, srcBuffer);
 		glBufferData(GL_SHADER_STORAGE_BUFFER, sizeof(grid), NULL, GL_DYNAMIC_COPY);
 		writeGrid();
-		glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 0, computeBuffer);
+		// Create dstBuffer
+		glGenBuffers(1, &dstBuffer);
+		glBindBuffer(GL_SHADER_STORAGE_BUFFER, dstBuffer);
+		glBufferData(GL_SHADER_STORAGE_BUFFER, sizeof(grid), NULL, GL_DYNAMIC_COPY);
 	}
 	void unloadBuffer() {
 		glBindBuffer(GL_SHADER_STORAGE_BUFFER, 0);
-		glDeleteBuffers(1, &computeBuffer);
-	}
-	void printGrid() {
-		readGrid();
-		for (int i = 0; i < GRID_SIZE; i++) {
-			for (int j = 0; j < GRID_SIZE; j++) {
-				for (int k = 0; k < GRID_SIZE; k++) {
-					printf("%i", grid[i][j][k]);
-				}
-				printf("\n");
-			}
-			printf("\n\n\n");
-		}
+		glDeleteBuffers(1, &srcBuffer);
+		glDeleteBuffers(1, &dstBuffer);
 	}
 	void clear() {
 		for (int i = 0; i < GRID_SIZE; i++)
@@ -113,11 +106,21 @@ struct ParticleGrid {
 		writeGrid();
 	}
 	void compute() {
+		// Copy src to dst (dst will be modified by compute program)
+		glBindBuffer(GL_COPY_READ_BUFFER, srcBuffer);
+		glBindBuffer(GL_COPY_WRITE_BUFFER, dstBuffer);
+		glCopyBufferSubData(GL_COPY_READ_BUFFER, GL_COPY_WRITE_BUFFER, 0, 0, sizeof(grid));
 		// Dispatch compute shader
 		glUseProgram(computeProgram);
-		glBindBuffer(GL_SHADER_STORAGE_BUFFER, computeBuffer);
+		glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 0, srcBuffer);
+		glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 1, dstBuffer);
 		glDispatchCompute(GRID_SIZE, GRID_SIZE, GRID_SIZE);
+		// Wait for writes to memory to finish
 		glMemoryBarrier(GL_ALL_BARRIER_BITS);
+		// Copy dst to src
+		glBindBuffer(GL_COPY_READ_BUFFER, dstBuffer);
+		glBindBuffer(GL_COPY_WRITE_BUFFER, srcBuffer);
+		glCopyBufferSubData(GL_COPY_READ_BUFFER, GL_COPY_WRITE_BUFFER, 0, 0, sizeof(grid));
 	}
 	void render() {
 		// Send necessary data to tess shaders
@@ -207,7 +210,7 @@ void cpuRenderGrid() {
 	}
 }
 
-void WriteSphere(vec3 center, int radius, ParticleType pType) {
+void WriteSphere(vec3 center, int radius, ParticleType pType, float spawnProb) {
 	grid.readGrid();
 	int xmin = center.x - radius; xmin = xmin > 0 ? xmin : 0;
 	int xmax = center.x + radius; xmax = xmax < GRID_SIZE ? xmax : GRID_SIZE - 1;
@@ -221,7 +224,9 @@ void WriteSphere(vec3 center, int radius, ParticleType pType) {
 				vec3 p = vec3(i, j, k);
 				float p_dist = dist(center, p);
 				if (p_dist <= radius) {
-					grid.grid[i][j][k] = pType;
+					if (rand_float() <= spawnProb) {
+						grid.grid[i][j][k] = pType;
+					}
 				}
 			}
 		}
@@ -234,9 +239,9 @@ void S_Keyboard(GLFWwindow* window, int key, int scancode, int action, int mods)
 	if (key == GLFW_KEY_ESCAPE || key == GLFW_KEY_Q) {
 		glfwSetWindowShouldClose(window, GLFW_TRUE);
 	} else if (key == GLFW_KEY_S) {
-		WriteSphere(vec3(16, 28, 16), 3, SAND);
+		WriteSphere(vec3(16, 28, 16), 3, SAND, 0.8);
 	} else if (key == GLFW_KEY_D) {
-		WriteSphere(vec3(16, 28, 16), 3, WATER);
+		WriteSphere(vec3(16, 28, 16), 3, WATER, 0.8);
 	} else if (key == GLFW_KEY_R) {
 		grid.clear();
 	}
