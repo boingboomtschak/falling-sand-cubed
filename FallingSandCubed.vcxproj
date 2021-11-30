@@ -79,7 +79,7 @@
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
     <LinkIncremental>true</LinkIncremental>
     <IncludePath>$(SolutionDir)\include;$(SolutionDir)\jb-include;$(IncludePath)</IncludePath>
-    <LibraryPath>C:\Users\dmckee\Documents\development\FallingSandCubed\jb-lib;C:\Users\dmckee\Documents\development\FallingSandCubed\lib;$(LibraryPath)</LibraryPath>
+    <LibraryPath>$(SolutionDir)\jb-lib;$(SolutionDir)\lib;$(LibraryPath)</LibraryPath>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
     <LinkIncremental>false</LinkIncremental>

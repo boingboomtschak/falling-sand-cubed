@@ -205,7 +205,7 @@ void renderDropper() {
 	glDrawElements(GL_TRIANGLES, 36, GL_UNSIGNED_INT, cube_triangles);
 }
 
-void WriteSphere(vec3 center, int radius, ParticleType pType, float spawnProb) {
+void WriteSphere(vec3 center, int radius, int pType, float spawnProb) {
 	grid.readGrid();
 	int xmin = center.x - radius; xmin = xmin > 0 ? xmin : 0;
 	int xmax = center.x + radius; xmax = xmax < GRID_SIZE ? xmax : GRID_SIZE - 1;
@@ -231,7 +231,7 @@ void WriteSphere(vec3 center, int radius, ParticleType pType, float spawnProb) {
 
 // Overriding default camera control callback
 void S_Keyboard(GLFWwindow* window, int key, int scancode, int action, int mods) {
-	if (key == GLFW_KEY_ESCAPE || key == GLFW_KEY_Q) {
+	if (key == GLFW_KEY_ESCAPE) {
 		glfwSetWindowShouldClose(window, GLFW_TRUE);
 	} else if (key == GLFW_KEY_S) {
 		WriteSphere(dropperPos, 3, SAND, 0.8);
@@ -240,13 +240,23 @@ void S_Keyboard(GLFWwindow* window, int key, int scancode, int action, int mods)
 	} else if (key == GLFW_KEY_R) {
 		grid.clear();
 	} else if (key == GLFW_KEY_UP) {
-		dropperPos.x += 1;
+		if (dropperPos.x < GRID_SIZE - 1)
+			dropperPos.x += 1;
 	} else if (key == GLFW_KEY_DOWN) {
-		dropperPos.x -= 1;
+		if (dropperPos.x > 0)
+			dropperPos.x -= 1;
 	} else if (key == GLFW_KEY_RIGHT) {
-		dropperPos.z += 1;
+		if (dropperPos.z < GRID_SIZE - 1)
+			dropperPos.z += 1;
 	} else if (key == GLFW_KEY_LEFT) {
-		dropperPos.z -= 1;
+		if (dropperPos.z > 0)
+			dropperPos.z -= 1;
+	} else if (key == GLFW_KEY_Q) {
+		if (dropperPos.y < GRID_SIZE - 1)
+			dropperPos.y += 1;
+	} else if (key == GLFW_KEY_E) {
+		if (dropperPos.y > 0)
+			dropperPos.y -= 1;
 	}
 }
 
