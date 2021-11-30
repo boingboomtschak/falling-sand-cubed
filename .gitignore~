@@ -5,6 +5,7 @@ x86/
 .vs/
 Debug/
 Release/
+*.vcxproj
 *.filters
 *.user
 *.swp
