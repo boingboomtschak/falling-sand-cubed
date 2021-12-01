@@ -180,6 +180,9 @@ void cpuRenderGrid() {
 					case SAND:
 						SetUniform(renderProgram, "color", vec4(0.906f, 0.702f, 0.498f, 1.0f));
 						break;
+					case SALT:
+						SetUniform(renderProgram, "color", vec4(0.902f, 0.906f, 0.910f, 1.0f));
+						break;
 					}
 					glDrawElements(GL_TRIANGLES, 36, GL_UNSIGNED_INT, cube_triangles);
 				}
@@ -237,6 +240,8 @@ void S_Keyboard(GLFWwindow* window, int key, int scancode, int action, int mods)
 		WriteSphere(dropperPos, 3, SAND, 0.8);
 	} else if (key == GLFW_KEY_D) {
 		WriteSphere(dropperPos, 3, WATER, 0.8);
+	} else if (key == GLFW_KEY_F) {
+		WriteSphere(dropperPos, 3, SALT, 0.8);
 	} else if (key == GLFW_KEY_R) {
 		grid.clear();
 	} else if (key == GLFW_KEY_UP) {
@@ -282,7 +287,7 @@ void UnloadBuffers() {
 }
 
 void Display() {
-	glClearColor(0.8f, 0.8f, 0.8f, 1.0f);
+	glClearColor(0.3f, 0.3f, 0.3f, 1.0f);
 	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 	cube.display(camera);
 	cpuRenderGrid();
