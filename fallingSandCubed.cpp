@@ -23,14 +23,15 @@ GLuint computeProgram = 0, srcBuffer = 0, dstBuffer = 0;
 GLuint renderProgram = 0;
 GLuint tempCubeBuffer = 0;
 
-const int GRID_SIZE = 128;
-const char* glsl_version = "#version 130";
+const int GRID_SIZE = 64;
+const char* render_glsl_version = "#version 130";
 int win_width = 800, win_height = 800;
 
 Camera camera((float)win_width / win_height, vec3(0, 0, 0), vec3(0, 0, -5));
 vec3 lightPos = vec3(1, 1, 0);
 dCube cube;
 vec3 dropperPos = vec3((int)(GRID_SIZE / 2), (int)(GRID_SIZE - 3), (int)(GRID_SIZE / 2));
+time_t start;
 
 float cube_points[][3] = { {-1, -1, 1}, {1, -1, 1}, {1, 1, 1}, {-1, 1, 1}, {-1, -1, -1}, {1, -1, -1}, {1, 1, -1}, {-1, 1, -1}, {-1, -1, 1}, {-1, -1, -1}, {-1, 1, -1}, {-1, 1, 1}, {1, -1, 1}, {1, -1, -1}, {1, 1, -1}, {1, 1, 1}, {-1 , 1, 1}, {1, 1, 1}, {1, 1, -1}, {-1, 1, -1}, {-1, -1, 1}, {1, -1, 1}, {1, -1, -1}, {-1, -1, -1} };
 float cube_normals[][3] = { {0, 0, 1}, {0, 0, 1}, {0, 0, 1}, {0, 0, 1}, {0, 0, -1}, {0, 0, -1}, {0, 0, -1}, {0, 0, -1}, {-1, 0, 0}, {-1, 0, 0}, {-1, 0, 0}, {-1, 0, 0}, {1, 0, 0}, {1, 0, 0}, {1, 0, 0}, {1, 0, 0}, {0, 1, 0}, {0, 1, 0}, {0, 1, 0}, {0, 1, 0}, {0, -1, 0}, {0, -1, 0}, {0, -1, 0}, {0, -1, 0} };
@@ -97,6 +98,7 @@ struct ParticleGrid {
 		glUseProgram(computeProgram);
 		glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 0, srcBuffer);
 		glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 1, dstBuffer);
+		SetUniform(computeProgram, "rngSeed", (int)(clock() - start));
 		glDispatchCompute(GRID_SIZE, GRID_SIZE, GRID_SIZE);
 		// Wait for writes to memory to finish
 		glMemoryBarrier(GL_ALL_BARRIER_BITS);
@@ -155,7 +157,7 @@ void CompileShaders() {
 	*/
 }
 
-void cpuRenderGrid() {
+void renderGrid() {
 	grid.readGrid();
 	glUseProgram(renderProgram);
 	glEnable(GL_BLEND);
@@ -185,6 +187,9 @@ void cpuRenderGrid() {
 						break;
 					case SAND:
 						SetUniform(renderProgram, "color", vec4(0.906f, 0.702f, 0.498f, 1.0f));
+						break;
+					case OIL:
+						SetUniform(renderProgram, "color", vec4(0.133f, 0.067f, 0.223f, 0.5f));
 						break;
 					case SALT:
 						SetUniform(renderProgram, "color", vec4(0.902f, 0.906f, 0.910f, 1.0f));
@@ -288,42 +293,47 @@ void UnloadBuffers() {
 	grid.unloadBuffer();
 }
 
-void Display() {
-	glClearColor(0.3f, 0.3f, 0.3f, 1.0f);
-	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-	cube.display(camera);
-	cpuRenderGrid();
-	renderDropper();
-	glFlush();
-
+void renderImGui() {
+	// Tell ImGui we're rendering a new frame
 	ImGui_ImplOpenGL3_NewFrame();
 	ImGui_ImplGlfw_NewFrame();
 	ImGui::NewFrame();
-	
-	ImGui::Begin("Settings");
+
+	// Begin brush settings window
+	ImGui::Begin("Brush Settings");
 	ImGui::SetWindowPos(ImVec2(0, 0));
-	
+
+	// Render buttons
 	if (ImGui::Button("Air")) {
 		selectedParticle = AIR;
 	} else if (ImGui::Button("Stone")) {
 		selectedParticle = STONE;
-	}
-	else if (ImGui::Button("Water")) {
+	} else if (ImGui::Button("Water")) {
 		selectedParticle = WATER;
-	}
-	else if (ImGui::Button("Sand")) {
+	} else if (ImGui::Button("Sand")) {
 		selectedParticle = SAND;
-	}
-	else if (ImGui::Button("Oil")) {
+	} else if (ImGui::Button("Oil")) {
 		selectedParticle = OIL;
-	}
-	else if (ImGui::Button("Salt")) {
+	} else if (ImGui::Button("Salt")) {
 		selectedParticle = SALT;
 	}
 
+	// End brush settings window 
 	ImGui::End();
+
+	// Render ImGui windows
 	ImGui::Render();
 	ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
+}
+
+void Display() {
+	glClearColor(0.3f, 0.3f, 0.3f, 1.0f);
+	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+	cube.display(camera);
+	renderGrid();
+	renderDropper();
+	renderImGui();
+	glFlush();
 }
 
 int main() {
@@ -342,7 +352,7 @@ int main() {
 	ImGuiIO& io = ImGui::GetIO(); (void)io;
 	ImGui::StyleColorsLight();
 	ImGui_ImplGlfw_InitForOpenGL(window, true);
-	ImGui_ImplOpenGL3_Init(glsl_version);
+	ImGui_ImplOpenGL3_Init(render_glsl_version);
 	gladLoadGLLoader((GLADloadproc)glfwGetProcAddress);
 	PrintGLErrors();
 	CompileShaders();
@@ -352,6 +362,7 @@ int main() {
 	glfwSetKeyCallback(window, S_Keyboard);
 	glfwSwapInterval(1);
 	int frame = 0;
+	start = clock();
 	while (!glfwWindowShouldClose(window)) {
 		grid.compute();
 		Display();

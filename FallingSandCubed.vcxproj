@@ -150,21 +150,18 @@
     <ClCompile Include="imgui\imgui_impl_opengl3.cpp" />
     <ClCompile Include="imgui\imgui_tables.cpp" />
     <ClCompile Include="imgui\imgui_widgets.cpp" />
+    <ClCompile Include="jb-lib\Draw.cpp" />
     <ClCompile Include="lib\dCube.cpp" />
     <ClCompile Include="fallingSandCubed.cpp" />
     <ClCompile Include="jb-lib\Camera.cpp" />
-    <ClCompile Include="jb-lib\Draw.cpp" />
     <ClCompile Include="jb-lib\glad.c" />
     <ClCompile Include="jb-lib\GLXtras.cpp" />
-    <ClCompile Include="jb-lib\Mesh.cpp" />
     <ClCompile Include="jb-lib\Misc.cpp" />
-    <ClCompile Include="lib\dMesh.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="fallingSandCubed.h" />
     <ClInclude Include="include\CameraControls.h" />
     <ClInclude Include="include\dCube.h" />
-    <ClInclude Include="include\dMesh.h" />
     <ClInclude Include="include\GeomUtils.h" />
   </ItemGroup>
   <ItemGroup>
