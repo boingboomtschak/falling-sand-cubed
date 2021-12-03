@@ -37,7 +37,6 @@ float cube_points[][3] = { {-1, -1, 1}, {1, -1, 1}, {1, 1, 1}, {-1, 1, 1}, {-1, 
 float cube_normals[][3] = { {0, 0, 1}, {0, 0, 1}, {0, 0, 1}, {0, 0, 1}, {0, 0, -1}, {0, 0, -1}, {0, 0, -1}, {0, 0, -1}, {-1, 0, 0}, {-1, 0, 0}, {-1, 0, 0}, {-1, 0, 0}, {1, 0, 0}, {1, 0, 0}, {1, 0, 0}, {1, 0, 0}, {0, 1, 0}, {0, 1, 0}, {0, 1, 0}, {0, 1, 0}, {0, -1, 0}, {0, -1, 0}, {0, -1, 0}, {0, -1, 0} };
 int cube_triangles[][3] = { {0, 1, 2}, {2, 3, 0}, {4, 5, 6}, {6, 7, 4}, {8, 9, 10}, {10, 11, 8}, {12, 13, 14}, {14, 15, 12}, {16, 17, 18}, {18, 19, 16}, {20, 21, 22}, {22, 23, 20} };
 
-
 enum ParticleType {
 	AIR = 0,
 	STONE = 1,
@@ -47,6 +46,8 @@ enum ParticleType {
 	SALT = 5,
 };
 
+int brushElement = SAND;
+int brushRadius = 3;
 
 struct ParticleGrid {
 	GLuint grid[GRID_SIZE][GRID_SIZE][GRID_SIZE];
@@ -115,7 +116,6 @@ struct ParticleGrid {
 };
 
 ParticleGrid grid;
-int selectedParticle = SAND;
 
 void CompileShaders() {
 	computeProgram = LinkProgramViaFile("computeShader.glsl");
@@ -243,12 +243,30 @@ void WriteSphere(vec3 center, int radius, int pType, float spawnProb) {
 	grid.writeGrid();
 }
 
+void S_MouseButton(GLFWwindow* w, int butn, int action, int mods) {
+	//if (!(ImGui::GetIO().WantCaptureMouse()))
+	double x, y;
+	glfwGetCursorPos(w, &x, &y);
+	y = win_height - y;
+	if (action == GLFW_PRESS)
+		camera.MouseDown((int)x, (int)y);
+	if (action == GLFW_RELEASE)
+		camera.MouseUp();
+}
+
+void S_MouseMove(GLFWwindow* w, double x, double y) {
+	if (glfwGetMouseButton(w, GLFW_MOUSE_BUTTON_LEFT) == GLFW_PRESS) { // drag
+		y = win_height - y;
+		camera.MouseDrag((int)x, (int)y, Shift(w));
+	}
+}
+
 // Overriding default camera control callback
 void S_Keyboard(GLFWwindow* window, int key, int scancode, int action, int mods) {
 	if (key == GLFW_KEY_ESCAPE) {
 		glfwSetWindowShouldClose(window, GLFW_TRUE);
 	} else if (key == GLFW_KEY_SPACE) {
-		WriteSphere(dropperPos, 3, selectedParticle, 0.8);
+		WriteSphere(dropperPos, brushRadius, brushElement, 0.8);
 	} else if (key == GLFW_KEY_R) {
 		grid.clear();
 	} else if (key == GLFW_KEY_UP) {
@@ -303,27 +321,31 @@ void renderImGui() {
 	ImGui::Begin("Brush Settings");
 	ImGui::SetWindowPos(ImVec2(0, 0));
 
-	// Render buttons
+	ImGui::Text("Element");
 	if (ImGui::Button("Air")) {
-		selectedParticle = AIR;
+		brushElement = AIR;
 	} else if (ImGui::Button("Stone")) {
-		selectedParticle = STONE;
+		brushElement = STONE;
 	} else if (ImGui::Button("Water")) {
-		selectedParticle = WATER;
+		brushElement = WATER;
 	} else if (ImGui::Button("Sand")) {
-		selectedParticle = SAND;
+		brushElement = SAND;
 	} else if (ImGui::Button("Oil")) {
-		selectedParticle = OIL;
+		brushElement = OIL;
 	} else if (ImGui::Button("Salt")) {
-		selectedParticle = SALT;
+		brushElement = SALT;
 	}
+	ImGui::SliderInt("Radius", &brushRadius, 1, 10);
 
 	// End brush settings window 
 	ImGui::End();
 
+	//ImGui::ShowDemoWindow();
+
 	// Render ImGui windows
 	ImGui::Render();
 	ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
+
 }
 
 void Display() {
@@ -359,6 +381,8 @@ int main() {
 	LoadBuffers();
 	glfwWindowHint(GLFW_SAMPLES, 4);
 	InitializeCallbacks(window);
+	glfwSetCursorPosCallback(window, S_MouseMove);
+	glfwSetMouseButtonCallback(window, S_MouseButton);
 	glfwSetKeyCallback(window, S_Keyboard);
 	glfwSwapInterval(1);
 	int frame = 0;
