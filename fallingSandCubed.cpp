@@ -32,6 +32,7 @@ vec3 lightPos = vec3(1, 1, 0);
 dCube cube;
 vec3 dropperPos = vec3((int)(GRID_SIZE / 2), (int)(GRID_SIZE - 3), (int)(GRID_SIZE / 2));
 time_t start;
+float bgColor[3] = { 0.4f, 0.4f, 0.4f };
 
 float cube_points[][3] = { {-1, -1, 1}, {1, -1, 1}, {1, 1, 1}, {-1, 1, 1}, {-1, -1, -1}, {1, -1, -1}, {1, 1, -1}, {-1, 1, -1}, {-1, -1, 1}, {-1, -1, -1}, {-1, 1, -1}, {-1, 1, 1}, {1, -1, 1}, {1, -1, -1}, {1, 1, -1}, {1, 1, 1}, {-1 , 1, 1}, {1, 1, 1}, {1, 1, -1}, {-1, 1, -1}, {-1, -1, 1}, {1, -1, 1}, {1, -1, -1}, {-1, -1, -1} };
 float cube_normals[][3] = { {0, 0, 1}, {0, 0, 1}, {0, 0, 1}, {0, 0, 1}, {0, 0, -1}, {0, 0, -1}, {0, 0, -1}, {0, 0, -1}, {-1, 0, 0}, {-1, 0, 0}, {-1, 0, 0}, {-1, 0, 0}, {1, 0, 0}, {1, 0, 0}, {1, 0, 0}, {1, 0, 0}, {0, 1, 0}, {0, 1, 0}, {0, 1, 0}, {0, 1, 0}, {0, -1, 0}, {0, -1, 0}, {0, -1, 0}, {0, -1, 0} };
@@ -180,7 +181,7 @@ void renderGrid() {
 						SetUniform(renderProgram, "color", vec4(0.0f, 0.0f, 0.0f, 0.05f));
 						break;
 					case STONE:
-						SetUniform(renderProgram, "color", vec4(0.1f, 0.1f, 0.1f, 1.0f));
+						SetUniform(renderProgram, "color", vec4(0.5f, 0.5f, 0.5f, 1.0f));
 						break;
 					case WATER:
 						SetUniform(renderProgram, "color", vec4(0.1f, 0.1f, 0.7f, 0.5f));
@@ -244,7 +245,8 @@ void WriteSphere(vec3 center, int radius, int pType, float spawnProb) {
 }
 
 void S_MouseButton(GLFWwindow* w, int butn, int action, int mods) {
-	//if (!(ImGui::GetIO().WantCaptureMouse()))
+	ImGuiIO& io = ImGui::GetIO();
+	if (io.WantCaptureMouse) return;
 	double x, y;
 	glfwGetCursorPos(w, &x, &y);
 	y = win_height - y;
@@ -255,6 +257,8 @@ void S_MouseButton(GLFWwindow* w, int butn, int action, int mods) {
 }
 
 void S_MouseMove(GLFWwindow* w, double x, double y) {
+	ImGuiIO& io = ImGui::GetIO();
+	if (io.WantCaptureMouse) return;
 	if (glfwGetMouseButton(w, GLFW_MOUSE_BUTTON_LEFT) == GLFW_PRESS) { // drag
 		y = win_height - y;
 		camera.MouseDrag((int)x, (int)y, Shift(w));
@@ -317,10 +321,9 @@ void renderImGui() {
 	ImGui_ImplGlfw_NewFrame();
 	ImGui::NewFrame();
 
-	// Begin brush settings window
+	// Brush settings window
 	ImGui::Begin("Brush Settings");
 	ImGui::SetWindowPos(ImVec2(0, 0));
-
 	ImGui::Text("Element");
 	if (ImGui::Button("Air")) {
 		brushElement = AIR;
@@ -336,8 +339,10 @@ void renderImGui() {
 		brushElement = SALT;
 	}
 	ImGui::SliderInt("Radius", &brushRadius, 1, 10);
+	ImGui::End();
 
-	// End brush settings window 
+	ImGui::Begin("Settings");
+	ImGui::ColorEdit3("", bgColor);
 	ImGui::End();
 
 	//ImGui::ShowDemoWindow();
@@ -349,7 +354,7 @@ void renderImGui() {
 }
 
 void Display() {
-	glClearColor(0.3f, 0.3f, 0.3f, 1.0f);
+	glClearColor(bgColor[0], bgColor[1], bgColor[2], 1.0f);
 	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 	cube.display(camera);
 	renderGrid();
