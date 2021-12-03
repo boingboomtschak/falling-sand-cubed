@@ -13,6 +13,9 @@
 #include "CameraControls.h"
 #include "GeomUtils.h"
 #include "dCube.h"
+#include "imgui/imgui.h"
+#include "imgui/imgui_impl_glfw.h"
+#include "imgui/imgui_impl_opengl3.h"
 
 using std::vector;
 
@@ -21,7 +24,7 @@ GLuint renderProgram = 0;
 GLuint tempCubeBuffer = 0;
 
 const int GRID_SIZE = 128;
-
+const char* glsl_version = "#version 130";
 int win_width = 800, win_height = 800;
 
 Camera camera((float)win_width / win_height, vec3(0, 0, 0), vec3(0, 0, -5));
@@ -33,6 +36,7 @@ float cube_points[][3] = { {-1, -1, 1}, {1, -1, 1}, {1, 1, 1}, {-1, 1, 1}, {-1, 
 float cube_normals[][3] = { {0, 0, 1}, {0, 0, 1}, {0, 0, 1}, {0, 0, 1}, {0, 0, -1}, {0, 0, -1}, {0, 0, -1}, {0, 0, -1}, {-1, 0, 0}, {-1, 0, 0}, {-1, 0, 0}, {-1, 0, 0}, {1, 0, 0}, {1, 0, 0}, {1, 0, 0}, {1, 0, 0}, {0, 1, 0}, {0, 1, 0}, {0, 1, 0}, {0, 1, 0}, {0, -1, 0}, {0, -1, 0}, {0, -1, 0}, {0, -1, 0} };
 int cube_triangles[][3] = { {0, 1, 2}, {2, 3, 0}, {4, 5, 6}, {6, 7, 4}, {8, 9, 10}, {10, 11, 8}, {12, 13, 14}, {14, 15, 12}, {16, 17, 18}, {18, 19, 16}, {20, 21, 22}, {22, 23, 20} };
 
+
 enum ParticleType {
 	AIR = 0,
 	STONE = 1,
@@ -41,6 +45,7 @@ enum ParticleType {
 	OIL = 4,
 	SALT = 5,
 };
+
 
 struct ParticleGrid {
 	GLuint grid[GRID_SIZE][GRID_SIZE][GRID_SIZE];
@@ -108,6 +113,7 @@ struct ParticleGrid {
 };
 
 ParticleGrid grid;
+int selectedParticle = SAND;
 
 void CompileShaders() {
 	computeProgram = LinkProgramViaFile("computeShader.glsl");
@@ -236,12 +242,8 @@ void WriteSphere(vec3 center, int radius, int pType, float spawnProb) {
 void S_Keyboard(GLFWwindow* window, int key, int scancode, int action, int mods) {
 	if (key == GLFW_KEY_ESCAPE) {
 		glfwSetWindowShouldClose(window, GLFW_TRUE);
-	} else if (key == GLFW_KEY_S) {
-		WriteSphere(dropperPos, 3, SAND, 0.8);
-	} else if (key == GLFW_KEY_D) {
-		WriteSphere(dropperPos, 3, WATER, 0.8);
-	} else if (key == GLFW_KEY_F) {
-		WriteSphere(dropperPos, 3, SALT, 0.8);
+	} else if (key == GLFW_KEY_SPACE) {
+		WriteSphere(dropperPos, 3, selectedParticle, 0.8);
 	} else if (key == GLFW_KEY_R) {
 		grid.clear();
 	} else if (key == GLFW_KEY_UP) {
@@ -293,6 +295,35 @@ void Display() {
 	cpuRenderGrid();
 	renderDropper();
 	glFlush();
+
+	ImGui_ImplOpenGL3_NewFrame();
+	ImGui_ImplGlfw_NewFrame();
+	ImGui::NewFrame();
+	
+	ImGui::Begin("Settings");
+	ImGui::SetWindowPos(ImVec2(0, 0));
+	
+	if (ImGui::Button("Air")) {
+		selectedParticle = AIR;
+	} else if (ImGui::Button("Stone")) {
+		selectedParticle = STONE;
+	}
+	else if (ImGui::Button("Water")) {
+		selectedParticle = WATER;
+	}
+	else if (ImGui::Button("Sand")) {
+		selectedParticle = SAND;
+	}
+	else if (ImGui::Button("Oil")) {
+		selectedParticle = OIL;
+	}
+	else if (ImGui::Button("Salt")) {
+		selectedParticle = SALT;
+	}
+
+	ImGui::End();
+	ImGui::Render();
+	ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
 }
 
 int main() {
@@ -306,6 +337,12 @@ int main() {
 	}
 	glfwSetWindowPos(window, 100, 100);
 	glfwMakeContextCurrent(window);
+	IMGUI_CHECKVERSION();
+	ImGui::CreateContext();
+	ImGuiIO& io = ImGui::GetIO(); (void)io;
+	ImGui::StyleColorsLight();
+	ImGui_ImplGlfw_InitForOpenGL(window, true);
+	ImGui_ImplOpenGL3_Init(glsl_version);
 	gladLoadGLLoader((GLADloadproc)glfwGetProcAddress);
 	PrintGLErrors();
 	CompileShaders();
@@ -322,6 +359,9 @@ int main() {
 		glfwSwapBuffers(window);
 		frame++;
 	}
+	ImGui_ImplOpenGL3_Shutdown();
+	ImGui_ImplGlfw_Shutdown();
+	ImGui::DestroyContext();
 	UnloadBuffers();
 	glfwDestroyWindow(window);
 	glfwTerminate();
