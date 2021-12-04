@@ -25,14 +25,24 @@ GLuint tempCubeBuffer = 0;
 
 const int GRID_SIZE = 64;
 const char* render_glsl_version = "#version 130";
-int win_width = 800, win_height = 800;
 
+int win_width = 800, win_height = 800;
 Camera camera((float)win_width / win_height, vec3(0, 0, 0), vec3(0, 0, -5));
+GLFWwindow* window;
 vec3 lightPos = vec3(1, 1, 0);
 dCube cube;
 vec3 dropperPos = vec3((int)(GRID_SIZE / 2), (int)(GRID_SIZE - 3), (int)(GRID_SIZE / 2));
 time_t start;
+
+// Colors
 float bgColor[3] = { 0.4f, 0.4f, 0.4f };
+float dropperColor[3] = { 1.0f, 0.0f, 0.0f };
+float stoneColor[3] = { 0.5f, 0.5f, 0.5f };
+float waterColor[3] = { 0.1f, 0.1f, 0.7f };
+float sandColor[3] = { 0.906f, 0.702f, 0.498f };
+float oilColor[3] = { 0.133f, 0.067f, 0.223f };
+float saltColor[3] = { 0.902f, 0.906f, 0.910f };
+float liquidTranslucence = 0.5f;
 
 float cube_points[][3] = { {-1, -1, 1}, {1, -1, 1}, {1, 1, 1}, {-1, 1, 1}, {-1, -1, -1}, {1, -1, -1}, {1, 1, -1}, {-1, 1, -1}, {-1, -1, 1}, {-1, -1, -1}, {-1, 1, -1}, {-1, 1, 1}, {1, -1, 1}, {1, -1, -1}, {1, 1, -1}, {1, 1, 1}, {-1 , 1, 1}, {1, 1, 1}, {1, 1, -1}, {-1, 1, -1}, {-1, -1, 1}, {1, -1, 1}, {1, -1, -1}, {-1, -1, -1} };
 float cube_normals[][3] = { {0, 0, 1}, {0, 0, 1}, {0, 0, 1}, {0, 0, 1}, {0, 0, -1}, {0, 0, -1}, {0, 0, -1}, {0, 0, -1}, {-1, 0, 0}, {-1, 0, 0}, {-1, 0, 0}, {-1, 0, 0}, {1, 0, 0}, {1, 0, 0}, {1, 0, 0}, {1, 0, 0}, {0, 1, 0}, {0, 1, 0}, {0, 1, 0}, {0, 1, 0}, {0, -1, 0}, {0, -1, 0}, {0, -1, 0}, {0, -1, 0} };
@@ -177,24 +187,21 @@ void renderGrid() {
 					mat4 trans = Translate((i - (GRID_SIZE / 2) + 0.5) * (2.0f / GRID_SIZE), (j - (GRID_SIZE / 2) + 0.5) * (2.0f / GRID_SIZE), (k - (GRID_SIZE / 2) + 0.5) * (2.0f / GRID_SIZE));
 					SetUniform(renderProgram, "modelview", camera.modelview * trans * scale);
 					switch (grid.grid[i][j][k]) {
-					case AIR:
-						SetUniform(renderProgram, "color", vec4(0.0f, 0.0f, 0.0f, 0.05f));
-						break;
-					case STONE:
-						SetUniform(renderProgram, "color", vec4(0.5f, 0.5f, 0.5f, 1.0f));
-						break;
-					case WATER:
-						SetUniform(renderProgram, "color", vec4(0.1f, 0.1f, 0.7f, 0.5f));
-						break;
-					case SAND:
-						SetUniform(renderProgram, "color", vec4(0.906f, 0.702f, 0.498f, 1.0f));
-						break;
-					case OIL:
-						SetUniform(renderProgram, "color", vec4(0.133f, 0.067f, 0.223f, 0.5f));
-						break;
-					case SALT:
-						SetUniform(renderProgram, "color", vec4(0.902f, 0.906f, 0.910f, 1.0f));
-						break;
+						case STONE:
+							SetUniform(renderProgram, "color", vec4(stoneColor[0], stoneColor[1], stoneColor[2], 1.0f));
+							break;
+						case WATER:
+							SetUniform(renderProgram, "color", vec4(waterColor[0], waterColor[1], waterColor[2], liquidTranslucence));
+							break;
+						case SAND:
+							SetUniform(renderProgram, "color", vec4(sandColor[0], sandColor[1], sandColor[2], 1.0f));
+							break;
+						case OIL:
+							SetUniform(renderProgram, "color", vec4(oilColor[0], oilColor[1], oilColor[2], liquidTranslucence));
+							break;
+						case SALT:
+							SetUniform(renderProgram, "color", vec4(saltColor[0], saltColor[1], saltColor[2], 1.0f));
+							break;
 					}
 					glDrawElements(GL_TRIANGLES, 36, GL_UNSIGNED_INT, cube_triangles);
 				}
@@ -216,7 +223,7 @@ void renderDropper() {
 	mat4 scale = Scale((float)(1.0f / GRID_SIZE));
 	mat4 trans = Translate((dropperPos.x - (GRID_SIZE / 2) + 0.5) * (2.0f / GRID_SIZE), (dropperPos.y - (GRID_SIZE / 2) + 0.5) * (2.0f / GRID_SIZE), (dropperPos.z - (GRID_SIZE / 2) + 0.5) * (2.0f / GRID_SIZE));
 	SetUniform(renderProgram, "modelview", camera.modelview * trans * scale);
-	SetUniform(renderProgram, "color", vec4(1.0f, 0.0f, 0.0f, 1.0f));
+	SetUniform(renderProgram, "color", vec4(dropperColor[0], dropperColor[1], dropperColor[2], 1.0f));
 	glDrawElements(GL_TRIANGLES, 36, GL_UNSIGNED_INT, cube_triangles);
 }
 
@@ -267,30 +274,56 @@ void S_MouseMove(GLFWwindow* w, double x, double y) {
 
 // Overriding default camera control callback
 void S_Keyboard(GLFWwindow* window, int key, int scancode, int action, int mods) {
-	if (key == GLFW_KEY_ESCAPE) {
-		glfwSetWindowShouldClose(window, GLFW_TRUE);
-	} else if (key == GLFW_KEY_SPACE) {
-		WriteSphere(dropperPos, brushRadius, brushElement, 0.8);
-	} else if (key == GLFW_KEY_R) {
-		grid.clear();
-	} else if (key == GLFW_KEY_UP) {
-		if (dropperPos.x < GRID_SIZE - 1)
-			dropperPos.x += 1;
-	} else if (key == GLFW_KEY_DOWN) {
-		if (dropperPos.x > 0)
-			dropperPos.x -= 1;
-	} else if (key == GLFW_KEY_RIGHT) {
-		if (dropperPos.z < GRID_SIZE - 1)
-			dropperPos.z += 1;
-	} else if (key == GLFW_KEY_LEFT) {
-		if (dropperPos.z > 0)
-			dropperPos.z -= 1;
-	} else if (key == GLFW_KEY_Q) {
-		if (dropperPos.y < GRID_SIZE - 1)
-			dropperPos.y += 1;
-	} else if (key == GLFW_KEY_E) {
-		if (dropperPos.y > 0)
-			dropperPos.y -= 1;
+	switch (key) {
+		case GLFW_KEY_R:
+			if (glfwGetKey(window, GLFW_KEY_LEFT_ALT) == GLFW_PRESS) grid.clear();
+			break;
+		case GLFW_KEY_SPACE:
+			WriteSphere(dropperPos, brushRadius, brushElement, 1.0);
+			break;
+		case GLFW_KEY_W:
+			if (dropperPos.x < GRID_SIZE - 1)
+				dropperPos.x += 1;
+			break;
+		case GLFW_KEY_S:
+			if (dropperPos.x > 0)
+				dropperPos.x -= 1;
+			break;
+		case GLFW_KEY_D:
+			if (dropperPos.z < GRID_SIZE - 1)
+				dropperPos.z += 1;
+			break;
+		case GLFW_KEY_A:
+			if (dropperPos.z > 0)
+				dropperPos.z -= 1;
+			break;
+		case GLFW_KEY_Q:
+			if (glfwGetKey(window, GLFW_KEY_LEFT_CONTROL) == GLFW_PRESS) glfwSetWindowShouldClose(window, GLFW_TRUE);
+			else if (dropperPos.y < GRID_SIZE - 1)
+				dropperPos.y += 1;
+			break;
+		case GLFW_KEY_E:
+			if (dropperPos.y > 0)
+				dropperPos.y -= 1;
+			break;
+		case GLFW_KEY_1:
+			brushElement = AIR; 
+			break;
+		case GLFW_KEY_2:
+			brushElement = STONE; 
+			break;
+		case GLFW_KEY_3:
+			brushElement = WATER; 
+			break;
+		case GLFW_KEY_4:
+			brushElement = SAND; 
+			break;
+		case GLFW_KEY_5:
+			brushElement = OIL; 
+			break;
+		case GLFW_KEY_6:
+			brushElement = SALT; 
+			break;
 	}
 }
 
@@ -321,29 +354,40 @@ void renderImGui() {
 	ImGui_ImplGlfw_NewFrame();
 	ImGui::NewFrame();
 
-	// Brush settings window
-	ImGui::Begin("Brush Settings");
-	ImGui::SetWindowPos(ImVec2(0, 0));
-	ImGui::Text("Element");
-	if (ImGui::Button("Air")) {
-		brushElement = AIR;
-	} else if (ImGui::Button("Stone")) {
-		brushElement = STONE;
-	} else if (ImGui::Button("Water")) {
-		brushElement = WATER;
-	} else if (ImGui::Button("Sand")) {
-		brushElement = SAND;
-	} else if (ImGui::Button("Oil")) {
-		brushElement = OIL;
-	} else if (ImGui::Button("Salt")) {
-		brushElement = SALT;
+	ImGui::BeginMainMenuBar();
+	if (ImGui::BeginMenu("FallingSandCubed")) {
+		ImGui::MenuItem("About", NULL, false);
+		if (ImGui::MenuItem("Quit", "CTRL + Q", false)) glfwSetWindowShouldClose(window, GLFW_TRUE);
+		ImGui::EndMenu();
 	}
-	ImGui::SliderInt("Radius", &brushRadius, 1, 10);
-	ImGui::End();
-
-	ImGui::Begin("Settings");
-	ImGui::ColorEdit3("", bgColor);
-	ImGui::End();
+	if (ImGui::BeginMenu("Brush")) {
+		if (ImGui::BeginMenu("Element")) {
+			if (ImGui::MenuItem("Air", "1")) brushElement = AIR;
+			if (ImGui::MenuItem("Stone", "2")) brushElement = STONE;
+			if (ImGui::MenuItem("Water", "3")) brushElement = WATER;
+			if (ImGui::MenuItem("Sand", "4")) brushElement = SAND;
+			if (ImGui::MenuItem("Oil", "5")) brushElement = OIL;
+			if (ImGui::MenuItem("Salt", "6")) brushElement = SALT;
+			ImGui::EndMenu();
+		}
+		ImGui::SliderInt("Radius", &brushRadius, 1, 10);
+		ImGui::EndMenu();
+	}
+	if (ImGui::BeginMenu("Grid")) {
+		if (ImGui::MenuItem("Clear", "ALT + Q", false)) grid.clear();
+		ImGui::EndMenu();
+	}
+	if (ImGui::BeginMenu("Colors")) {
+		ImGui::ColorEdit3("BG Color", bgColor);
+		ImGui::ColorEdit3("Dropper Color", dropperColor);
+		ImGui::ColorEdit3("Stone Color", stoneColor);
+		ImGui::ColorEdit3("Water Color", waterColor);
+		ImGui::ColorEdit3("Sand Color", sandColor);
+		ImGui::ColorEdit3("Oil Color", oilColor);
+		ImGui::ColorEdit3("Salt Color", saltColor);
+		ImGui::EndMenu();
+	}
+	ImGui::EndMainMenuBar(); 
 
 	//ImGui::ShowDemoWindow();
 
@@ -367,7 +411,7 @@ int main() {
 	srand((int)time(NULL));
 	if (!glfwInit())
 		return 1;
-	GLFWwindow* window = glfwCreateWindow(win_width, win_height, "Falling Sand: Cubed", NULL, NULL);
+	window = glfwCreateWindow(win_width, win_height, "Falling Sand: Cubed", NULL, NULL);
 	if (!window) {
 		glfwTerminate();
 		return 1;
@@ -377,7 +421,7 @@ int main() {
 	IMGUI_CHECKVERSION();
 	ImGui::CreateContext();
 	ImGuiIO& io = ImGui::GetIO(); (void)io;
-	ImGui::StyleColorsLight();
+	ImGui::StyleColorsClassic();
 	ImGui_ImplGlfw_InitForOpenGL(window, true);
 	ImGui_ImplOpenGL3_Init(render_glsl_version);
 	gladLoadGLLoader((GLADloadproc)glfwGetProcAddress);
