@@ -166,11 +166,12 @@
     <ClInclude Include="include\GeomUtils.h" />
   </ItemGroup>
   <ItemGroup>
-    <None Include="computeShader.glsl" />
-    <None Include="fragmentShader.glsl" />
-    <None Include="tessControlShader.glsl" />
-    <None Include="tessEvalShader.glsl" />
-    <None Include="vertexShader.glsl" />
+    <None Include="compute.comp" />
+    <None Include="gridRender.frag" />
+    <None Include="gridRender.vert" />
+    <None Include="render.frag" />
+    <None Include="gridRender.geom" />
+    <None Include="render.vert" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">

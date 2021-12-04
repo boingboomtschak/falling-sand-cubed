@@ -23,7 +23,7 @@ using std::vector;
 using std::string;
 
 GLuint computeProgram = 0, srcBuffer = 0, dstBuffer = 0;
-GLuint renderProgram = 0;
+GLuint renderProgram = 0, geomRenderProgram = 0;
 GLuint tempCubeBuffer = 0;
 
 const int GRID_SIZE = 64;
@@ -135,6 +135,7 @@ struct ParticleGrid {
 	}
 	void render() {
 		// Send necessary data to tess shaders
+		glUseProgram(geomRenderProgram);
 
 	}
 	
@@ -143,43 +144,42 @@ struct ParticleGrid {
 ParticleGrid grid;
 
 void CompileShaders() {
-	computeProgram = LinkProgramViaFile("computeShader.glsl");
+	computeProgram = LinkProgramViaFile("compute.comp");
 	if (!computeProgram) {
 		fprintf(stderr, "SHADER: Error linking compute shader! Exiting...\n");
 		exit(1);
 	}
-	renderProgram = LinkProgramViaFile("vertexShader.glsl", "fragmentShader.glsl");
+	renderProgram = LinkProgramViaFile("render.vert", "render.frag");
 	if (!renderProgram) {
 		fprintf(stderr, "SHADER: Error linking render shader! Exiting...\n");
 		exit(1);
 	}
+	geomRenderProgram = LinkProgramViaFile("gridRender.vert", "gridRender.frag");
+	if (!geomRenderProgram) {
+		fprintf(stderr, "SHADER: Error linking grid render shader! Exiting...\n");
+		exit(1);
+	}
 	/*
-	GLuint vshader = CompileShaderViaFile("vertexShader.glsl", GL_VERTEX_SHADER);
+	GLuint vshader = CompileShaderViaFile("gridRender.vert", GL_VERTEX_SHADER);
 	if (!vshader) {
 		fprintf(stderr, "SHADER: Error compiling vertex shader! Exiting...\n");
 		exit(1);
 	}
-	GLuint tcshader = CompileShaderViaFile("tessControlShader.glsl", GL_TESS_CONTROL_SHADER);
-	if (!tcshader) {
-		fprintf(stderr, "SHADER: Error compiling tessellation control shader! Exiting...\n");
+	GLuint gshader = CompileShaderViaFile("gridRender.geom", GL_GEOMETRY_SHADER);
+	if (!gshader) {
+		fprintf(stderr, "SHADER: Error compiling geometry shader! Exiting...\n");
 		exit(1);
 	}
-	GLuint teshader = CompileShaderViaFile("tessEvalShader.glsl", GL_TESS_EVALUATION_SHADER);
-	if (!teshader) {
-		fprintf(stderr, "SHADER: Error compiling tessellation evaluation shader! Exiting...\n");
-		exit(1);
-	}
-	GLuint fshader = CompileShaderViaFile("fragmentShader.glsl", GL_FRAGMENT_SHADER);
+	GLuint fshader = CompileShaderViaFile("gridRender.frag", GL_FRAGMENT_SHADER);
 	if (!fshader) {
 		fprintf(stderr, "SHADER: Error compiling fragment shader! Exiting...\n");
 		exit(1);
 	}
-	renderProgram = LinkProgram(vshader, tcshader, teshader, 0, fshader);
-	if (!renderProgram) {
+	geomRenderProgram = LinkProgram(vshader, NULL, NULL, gshader, fshader);
+	if (!geomRenderProgram) {
 		fprintf(stderr, "SHADER: Error linking render program! Exiting...\n");
 		exit(1);
-	}
-	*/
+	} */
 }
 
 void RenderGrid() {
@@ -555,6 +555,7 @@ void Display() {
 	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 	cube.display(camera);
 	RenderGrid();
+	//grid.render();
 	RenderDropper();
 	RenderImGui();
 	glFlush();
