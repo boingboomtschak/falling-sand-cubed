@@ -13,6 +13,7 @@
 #include "CameraControls.h"
 #include "GeomUtils.h"
 #include "dCube.h"
+#include "fallingSandTexts.h"
 #include "imgui/imgui.h"
 #include "imgui/imgui_impl_glfw.h"
 #include "imgui/imgui_impl_opengl3.h"
@@ -43,6 +44,10 @@ float sandColor[3] = { 0.906f, 0.702f, 0.498f };
 float oilColor[3] = { 0.133f, 0.067f, 0.223f };
 float saltColor[3] = { 0.902f, 0.906f, 0.910f };
 float liquidTranslucence = 0.5f;
+
+// Window show toggles
+static bool showAbout = false;
+static bool showHelp = false;
 
 float cube_points[][3] = { {-1, -1, 1}, {1, -1, 1}, {1, 1, 1}, {-1, 1, 1}, {-1, -1, -1}, {1, -1, -1}, {1, 1, -1}, {-1, 1, -1}, {-1, -1, 1}, {-1, -1, -1}, {-1, 1, -1}, {-1, 1, 1}, {1, -1, 1}, {1, -1, -1}, {1, 1, -1}, {1, 1, 1}, {-1 , 1, 1}, {1, 1, 1}, {1, 1, -1}, {-1, 1, -1}, {-1, -1, 1}, {1, -1, 1}, {1, -1, -1}, {-1, -1, -1} };
 float cube_normals[][3] = { {0, 0, 1}, {0, 0, 1}, {0, 0, 1}, {0, 0, 1}, {0, 0, -1}, {0, 0, -1}, {0, 0, -1}, {0, 0, -1}, {-1, 0, 0}, {-1, 0, 0}, {-1, 0, 0}, {-1, 0, 0}, {1, 0, 0}, {1, 0, 0}, {1, 0, 0}, {1, 0, 0}, {0, 1, 0}, {0, 1, 0}, {0, 1, 0}, {0, 1, 0}, {0, -1, 0}, {0, -1, 0}, {0, -1, 0}, {0, -1, 0} };
@@ -168,7 +173,7 @@ void CompileShaders() {
 	*/
 }
 
-void renderGrid() {
+void RenderGrid() {
 	grid.readGrid();
 	glUseProgram(renderProgram);
 	glEnable(GL_BLEND);
@@ -210,7 +215,7 @@ void renderGrid() {
 	}
 }
 
-void renderDropper() {
+void RenderDropper() {
 	glUseProgram(renderProgram);
 	glEnable(GL_BLEND);
 	glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
@@ -227,7 +232,7 @@ void renderDropper() {
 	glDrawElements(GL_TRIANGLES, 36, GL_UNSIGNED_INT, cube_triangles);
 }
 
-void WriteSphere(vec3 center, int radius, int pType, float spawnProb) {
+void WriteSphere(vec3 center, int radius, int pType) {
 	grid.readGrid();
 	int xmin = center.x - radius; xmin = xmin > 0 ? xmin : 0;
 	int xmax = center.x + radius; xmax = xmax < GRID_SIZE ? xmax : GRID_SIZE - 1;
@@ -241,9 +246,7 @@ void WriteSphere(vec3 center, int radius, int pType, float spawnProb) {
 				vec3 p = vec3(i, j, k);
 				float p_dist = dist(center, p);
 				if (p_dist <= radius) {
-					if (rand_float() <= spawnProb) {
-						grid.grid[i][j][k] = pType;
-					}
+					grid.grid[i][j][k] = pType;
 				}
 			}
 		}
@@ -279,7 +282,10 @@ void S_Keyboard(GLFWwindow* window, int key, int scancode, int action, int mods)
 			if (glfwGetKey(window, GLFW_KEY_LEFT_ALT) == GLFW_PRESS) grid.clear();
 			break;
 		case GLFW_KEY_SPACE:
-			WriteSphere(dropperPos, brushRadius, brushElement, 1.0);
+			WriteSphere(dropperPos, brushRadius, brushElement);
+			break;
+		case GLFW_KEY_H:
+			if (glfwGetKey(window, GLFW_KEY_LEFT_CONTROL) == GLFW_PRESS) showHelp = true;
 			break;
 		case GLFW_KEY_W:
 			if (dropperPos.x < GRID_SIZE - 1)
@@ -294,12 +300,21 @@ void S_Keyboard(GLFWwindow* window, int key, int scancode, int action, int mods)
 				dropperPos.z += 1;
 			break;
 		case GLFW_KEY_A:
+			if (glfwGetKey(window, GLFW_KEY_LEFT_CONTROL) == GLFW_PRESS) {
+				showAbout = true;
+				return;
+			}
 			if (dropperPos.z > 0)
 				dropperPos.z -= 1;
 			break;
 		case GLFW_KEY_Q:
-			if (glfwGetKey(window, GLFW_KEY_LEFT_CONTROL) == GLFW_PRESS) glfwSetWindowShouldClose(window, GLFW_TRUE);
-			else if (dropperPos.y < GRID_SIZE - 1)
+			if (glfwGetKey(window, GLFW_KEY_LEFT_CONTROL) == GLFW_PRESS) {
+				glfwSetWindowShouldClose(window, GLFW_TRUE); return; 
+			}
+			if (glfwGetKey(window, GLFW_KEY_LEFT_ALT) == GLFW_PRESS) {
+				grid.clear(); return;
+			}
+			if (dropperPos.y < GRID_SIZE - 1)
 				dropperPos.y += 1;
 			break;
 		case GLFW_KEY_E:
@@ -348,15 +363,51 @@ void UnloadBuffers() {
 	grid.unloadBuffer();
 }
 
-void renderImGui() {
+void ShowAboutWindow(bool* p_open) {
+	int about_width = 400, about_height = 200;
+	ImGuiWindowFlags window_flags = ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoCollapse;
+	ImGui::SetNextWindowPos(ImVec2((win_width / 2) - (about_width / 2), (win_height / 2) - (about_height / 2)), ImGuiCond_Once);
+	ImGui::SetNextWindowSize(ImVec2(about_width, about_height), ImGuiCond_Once);
+	if (!ImGui::Begin("About", &showAbout, window_flags)) ImGui::End();
+	else {
+		ImGui::Text("Falling Sand Cubed (FSC)");
+		ImGui::Separator();
+		//ImGui::BeginChild("body text", ImVec2(0, 0), true, ImGuiWindowFlags_AlwaysAutoResize);
+		ImGui::TextWrapped(FSTexts::AboutText);
+		//ImGui::EndChild();
+		ImGui::End();
+	}
+}
+
+void ShowHelpWindow(bool* p_open) {
+	int help_width = 400, help_height = 240;
+	ImGuiWindowFlags window_flags = ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoCollapse;
+	ImGui::SetNextWindowPos(ImVec2((win_width / 2) - (help_width / 2), (win_height / 2) - (help_height / 2)), ImGuiCond_Once);
+	ImGui::SetNextWindowSize(ImVec2(help_width, help_height), ImGuiCond_Once);
+	if (!ImGui::Begin("Help", &showHelp, window_flags)) ImGui::End();
+	else {
+		ImGui::BulletText("Use the mouse to drag the simulation cube around.");
+		ImGui::BulletText("Use the mouse wheel to zoom the camera in and out.");
+		ImGui::BulletText("Use the WASD keys to move the brush cursor \n(shown as a floating cube) horizontally.");
+		ImGui::BulletText("Use the QE keys to move the brush cursor up and \ndown.");
+		ImGui::BulletText("Use the SPACE key to draw using the brush cursor.");
+		ImGui::BulletText("Use the numeric keys (1-6) to quick select an \nelement, or use the 'Brush' tab on the menu bar \nabove.");
+		ImGui::BulletText("Most functions can be accessed using the menu bar,\nand certain options have an associated key \ncombination shown next to them.");
+		ImGui::End();
+	}
+}
+
+void RenderImGui() {
 	// Tell ImGui we're rendering a new frame
 	ImGui_ImplOpenGL3_NewFrame();
 	ImGui_ImplGlfw_NewFrame();
 	ImGui::NewFrame();
 
+	// Create main menu bar
 	ImGui::BeginMainMenuBar();
 	if (ImGui::BeginMenu("FallingSandCubed")) {
-		ImGui::MenuItem("About", NULL, false);
+		if (ImGui::MenuItem("About", NULL, false)) showAbout = true;
+		if (ImGui::MenuItem("Help", "CTRL + H", false)) showHelp = true;
 		if (ImGui::MenuItem("Quit", "CTRL + Q", false)) glfwSetWindowShouldClose(window, GLFW_TRUE);
 		ImGui::EndMenu();
 	}
@@ -370,7 +421,9 @@ void renderImGui() {
 			if (ImGui::MenuItem("Salt", "6")) brushElement = SALT;
 			ImGui::EndMenu();
 		}
-		ImGui::SliderInt("Radius", &brushRadius, 1, 10);
+		ImGui::InputInt("Radius", &brushRadius, 1, 5);
+		if (brushRadius < 1) brushRadius = 1;
+		if (brushRadius > 10) brushRadius = 10;
 		ImGui::EndMenu();
 	}
 	if (ImGui::BeginMenu("Grid")) {
@@ -389,6 +442,10 @@ void renderImGui() {
 	}
 	ImGui::EndMainMenuBar(); 
 
+	// Show windows
+	if (showAbout) ShowAboutWindow(&showAbout);
+	if (showHelp) ShowHelpWindow(&showHelp);
+
 	//ImGui::ShowDemoWindow();
 
 	// Render ImGui windows
@@ -401,9 +458,9 @@ void Display() {
 	glClearColor(bgColor[0], bgColor[1], bgColor[2], 1.0f);
 	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 	cube.display(camera);
-	renderGrid();
-	renderDropper();
-	renderImGui();
+	RenderGrid();
+	RenderDropper();
+	RenderImGui();
 	glFlush();
 }
 

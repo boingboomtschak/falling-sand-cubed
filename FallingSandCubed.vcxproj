@@ -160,7 +160,7 @@
     <ClCompile Include="jb-lib\Misc.cpp" />
   </ItemGroup>
   <ItemGroup>
-    <ClInclude Include="fallingSandCubed.h" />
+    <ClInclude Include="fallingSandTexts.h" />
     <ClInclude Include="include\CameraControls.h" />
     <ClInclude Include="include\dCube.h" />
     <ClInclude Include="include\GeomUtils.h" />
