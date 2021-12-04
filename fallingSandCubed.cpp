@@ -6,6 +6,7 @@
 #include <GLFW/glfw3.h>
 #include <time.h>
 #include <vector>
+#include <string>
 #include "VecMat.h"
 #include "Camera.h"
 #include "Misc.h"
@@ -13,12 +14,13 @@
 #include "CameraControls.h"
 #include "GeomUtils.h"
 #include "dCube.h"
-#include "fallingSandTexts.h"
+#include "fallingSandGui.h"
 #include "imgui/imgui.h"
 #include "imgui/imgui_impl_glfw.h"
 #include "imgui/imgui_impl_opengl3.h"
 
 using std::vector;
+using std::string;
 
 GLuint computeProgram = 0, srcBuffer = 0, dstBuffer = 0;
 GLuint renderProgram = 0;
@@ -34,6 +36,7 @@ vec3 lightPos = vec3(1, 1, 0);
 dCube cube;
 vec3 dropperPos = vec3((int)(GRID_SIZE / 2), (int)(GRID_SIZE - 3), (int)(GRID_SIZE / 2));
 time_t start;
+int livingParticles = 0;
 
 // Colors
 float bgColor[3] = { 0.4f, 0.4f, 0.4f };
@@ -48,6 +51,11 @@ float liquidTranslucence = 0.5f;
 // Window show toggles
 static bool showAbout = false;
 static bool showHelp = false;
+static bool showOverlay = false;
+static bool showDemo = false; // debug
+static bool showMetrics = false; // debug
+int overlayCorner = 1; // Defaults to top-right
+static bool themeClassic = true, themeLight = false, themeDark = false;
 
 float cube_points[][3] = { {-1, -1, 1}, {1, -1, 1}, {1, 1, 1}, {-1, 1, 1}, {-1, -1, -1}, {1, -1, -1}, {1, 1, -1}, {-1, 1, -1}, {-1, -1, 1}, {-1, -1, -1}, {-1, 1, -1}, {-1, 1, 1}, {1, -1, 1}, {1, -1, -1}, {1, 1, -1}, {1, 1, 1}, {-1 , 1, 1}, {1, 1, 1}, {1, 1, -1}, {-1, 1, -1}, {-1, -1, 1}, {1, -1, 1}, {1, -1, -1}, {-1, -1, -1} };
 float cube_normals[][3] = { {0, 0, 1}, {0, 0, 1}, {0, 0, 1}, {0, 0, 1}, {0, 0, -1}, {0, 0, -1}, {0, 0, -1}, {0, 0, -1}, {-1, 0, 0}, {-1, 0, 0}, {-1, 0, 0}, {-1, 0, 0}, {1, 0, 0}, {1, 0, 0}, {1, 0, 0}, {1, 0, 0}, {0, 1, 0}, {0, 1, 0}, {0, 1, 0}, {0, 1, 0}, {0, -1, 0}, {0, -1, 0}, {0, -1, 0}, {0, -1, 0} };
@@ -63,6 +71,7 @@ enum ParticleType {
 };
 
 int brushElement = SAND;
+string brushElementString = "SAND";
 int brushRadius = 3;
 
 struct ParticleGrid {
@@ -254,6 +263,40 @@ void WriteSphere(vec3 center, int radius, int pType) {
 	grid.writeGrid();
 }
 
+int FindLivingParticles() {
+	int p = 0;
+	for (size_t i = 0; i < GRID_SIZE; i++)
+		for (size_t j = 0; j < GRID_SIZE; j++)
+			for (size_t k = 0; k < GRID_SIZE; k++)
+				if (grid.grid[i][j][k] != AIR)
+					p++;
+	return p;
+}
+
+void ChangeBrush(int pType) {
+	brushElement = pType;
+	switch (pType) {
+	case AIR:
+		brushElementString = "AIR";
+		break;
+	case STONE:
+		brushElementString = "STONE";
+		break;
+	case WATER:
+		brushElementString = "WATER";
+		break;
+	case SAND:
+		brushElementString = "SAND";
+		break;
+	case OIL:
+		brushElementString = "OIL";
+		break;
+	case SALT:
+		brushElementString = "SALT";
+		break;
+	}
+}
+
 void S_MouseButton(GLFWwindow* w, int butn, int action, int mods) {
 	ImGuiIO& io = ImGui::GetIO();
 	if (io.WantCaptureMouse) return;
@@ -322,22 +365,22 @@ void S_Keyboard(GLFWwindow* window, int key, int scancode, int action, int mods)
 				dropperPos.y -= 1;
 			break;
 		case GLFW_KEY_1:
-			brushElement = AIR; 
+			ChangeBrush(AIR);
 			break;
 		case GLFW_KEY_2:
-			brushElement = STONE; 
+			ChangeBrush(STONE);
 			break;
 		case GLFW_KEY_3:
-			brushElement = WATER; 
+			ChangeBrush(WATER);
 			break;
 		case GLFW_KEY_4:
-			brushElement = SAND; 
+			ChangeBrush(SAND);
 			break;
 		case GLFW_KEY_5:
-			brushElement = OIL; 
+			ChangeBrush(OIL);
 			break;
 		case GLFW_KEY_6:
-			brushElement = SALT; 
+			ChangeBrush(SALT);
 			break;
 	}
 }
@@ -372,9 +415,7 @@ void ShowAboutWindow(bool* p_open) {
 	else {
 		ImGui::Text("Falling Sand Cubed (FSC)");
 		ImGui::Separator();
-		//ImGui::BeginChild("body text", ImVec2(0, 0), true, ImGuiWindowFlags_AlwaysAutoResize);
-		ImGui::TextWrapped(FSTexts::AboutText);
-		//ImGui::EndChild();
+		ImGui::TextWrapped(FSGui::AboutText);
 		ImGui::End();
 	}
 }
@@ -397,6 +438,31 @@ void ShowHelpWindow(bool* p_open) {
 	}
 }
 
+void ShowOverlayWindow(bool* p_open) {
+	ImGuiIO& io = ImGui::GetIO();
+	ImGuiWindowFlags window_flags = ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_NoSavedSettings | ImGuiWindowFlags_NoNav | ImGuiWindowFlags_NoMove;
+	const float PAD = 10.0f;
+	const ImGuiViewport* viewport = ImGui::GetMainViewport();
+	ImVec2 work_pos = viewport->WorkPos; 
+	ImVec2 work_size = viewport->WorkSize;
+	ImVec2 window_pos, window_pos_pivot;
+	window_pos.x = (overlayCorner & 1) ? (work_pos.x + work_size.x - PAD) : (work_pos.x + PAD);
+	window_pos.y = (overlayCorner & 2) ? (work_pos.y + work_size.y - PAD) : (work_pos.y + PAD);
+	window_pos_pivot.x = (overlayCorner & 1) ? 1.0f : 0.0f;
+	window_pos_pivot.y = (overlayCorner & 2) ? 1.0f : 0.0f;
+	ImGui::SetNextWindowPos(window_pos, ImGuiCond_Always, window_pos_pivot);
+	ImGui::SetNextWindowBgAlpha(0.35f); 
+	if (ImGui::Begin("Overlay", p_open, window_flags)) {
+		ImGui::Text("Framerate: %.0f fps", io.Framerate);
+		ImGui::Text("Particles: %i", livingParticles);
+		ImGui::Text("Brush: (%i,%i,%i)", (int)dropperPos.x, (int)dropperPos.y, (int)dropperPos.z);
+		ImGui::Text("Element: %s", brushElementString.c_str());
+		ImGui::Text("Grid: %ix%ix%i", GRID_SIZE, GRID_SIZE, GRID_SIZE);
+		ImGui::Text("(Total %i)", GRID_SIZE * GRID_SIZE * GRID_SIZE);
+	}
+	ImGui::End();
+}
+
 void RenderImGui() {
 	// Tell ImGui we're rendering a new frame
 	ImGui_ImplOpenGL3_NewFrame();
@@ -406,24 +472,49 @@ void RenderImGui() {
 	// Create main menu bar
 	ImGui::BeginMainMenuBar();
 	if (ImGui::BeginMenu("FallingSandCubed")) {
-		if (ImGui::MenuItem("About", NULL, false)) showAbout = true;
-		if (ImGui::MenuItem("Help", "CTRL + H", false)) showHelp = true;
+		if (ImGui::MenuItem("About", "CTRL + A", false)) showAbout = !showAbout;
+		if (ImGui::MenuItem("Help", "CTRL + H", false)) showHelp = !showHelp;
+		if (ImGui::BeginMenu("Overlay")) {
+			if (ImGui::MenuItem("Toggle", "CTRL + O", showOverlay)) showOverlay = !showOverlay;
+			if (ImGui::MenuItem("Top-left", NULL, overlayCorner == 0)) overlayCorner = 0;
+			if (ImGui::MenuItem("Top-right", NULL, overlayCorner == 1)) overlayCorner = 1;
+			if (ImGui::MenuItem("Bottom-left", NULL, overlayCorner == 2)) overlayCorner = 2;
+			if (ImGui::MenuItem("Bottom-right", NULL, overlayCorner == 3)) overlayCorner = 3;
+			ImGui::EndMenu();
+		}
+		if (ImGui::BeginMenu("Themes")) {
+			if (ImGui::MenuItem("Classic", NULL, themeClassic)) {
+				themeClassic = true, themeLight = false, themeDark = false;
+				ImGui::StyleColorsClassic();
+			}
+			if (ImGui::MenuItem("Light", NULL, themeLight)) {
+				themeClassic = false, themeLight = true, themeDark = false;
+				ImGui::StyleColorsLight();
+			}
+			if (ImGui::MenuItem("Dark", NULL, themeDark)) {
+				themeClassic = false, themeLight = false, themeDark = true;
+				ImGui::StyleColorsDark();
+			}
+			ImGui::EndMenu();
+		}
 		if (ImGui::MenuItem("Quit", "CTRL + Q", false)) glfwSetWindowShouldClose(window, GLFW_TRUE);
 		ImGui::EndMenu();
 	}
 	if (ImGui::BeginMenu("Brush")) {
+		ImGui::BeginChild("brush menu", ImVec2(150, 40));
 		if (ImGui::BeginMenu("Element")) {
-			if (ImGui::MenuItem("Air", "1")) brushElement = AIR;
-			if (ImGui::MenuItem("Stone", "2")) brushElement = STONE;
-			if (ImGui::MenuItem("Water", "3")) brushElement = WATER;
-			if (ImGui::MenuItem("Sand", "4")) brushElement = SAND;
-			if (ImGui::MenuItem("Oil", "5")) brushElement = OIL;
-			if (ImGui::MenuItem("Salt", "6")) brushElement = SALT;
+			if (ImGui::MenuItem("Air", "1", brushElement == AIR)) ChangeBrush(AIR);
+			if (ImGui::MenuItem("Stone", "2", brushElement == STONE)) ChangeBrush(STONE);
+			if (ImGui::MenuItem("Water", "3", brushElement == WATER)) ChangeBrush(WATER);
+			if (ImGui::MenuItem("Sand", "4", brushElement == SAND)) ChangeBrush(SAND);
+			if (ImGui::MenuItem("Oil", "5", brushElement == OIL)) ChangeBrush(OIL);
+			if (ImGui::MenuItem("Salt", "6", brushElement == SALT)) ChangeBrush(SALT);
 			ImGui::EndMenu();
 		}
 		ImGui::InputInt("Radius", &brushRadius, 1, 5);
 		if (brushRadius < 1) brushRadius = 1;
 		if (brushRadius > 10) brushRadius = 10;
+		ImGui::EndChild();
 		ImGui::EndMenu();
 	}
 	if (ImGui::BeginMenu("Grid")) {
@@ -440,18 +531,23 @@ void RenderImGui() {
 		ImGui::ColorEdit3("Salt Color", saltColor);
 		ImGui::EndMenu();
 	}
+	if (ImGui::BeginMenu("Debug")) {
+		if (ImGui::MenuItem("ImGui Demo", NULL, showDemo)) showDemo = !showDemo;
+		if (ImGui::MenuItem("ImGui Metrics", NULL, showMetrics)) showMetrics = !showMetrics;
+		ImGui::EndMenu();
+	}
 	ImGui::EndMainMenuBar(); 
 
 	// Show windows
 	if (showAbout) ShowAboutWindow(&showAbout);
 	if (showHelp) ShowHelpWindow(&showHelp);
-
-	//ImGui::ShowDemoWindow();
+	if (showOverlay) ShowOverlayWindow(&showOverlay);
+	if (showDemo) ImGui::ShowDemoWindow(); // debug
+	if (showMetrics) ImGui::ShowMetricsWindow(); // debug
 
 	// Render ImGui windows
 	ImGui::Render();
 	ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
-
 }
 
 void Display() {
@@ -495,6 +591,7 @@ int main() {
 	start = clock();
 	while (!glfwWindowShouldClose(window)) {
 		grid.compute();
+		livingParticles = FindLivingParticles();
 		Display();
 		glfwPollEvents();
 		glfwSwapBuffers(window);

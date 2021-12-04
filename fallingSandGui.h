@@ -1,9 +1,9 @@
 #pragma once
 
-#ifndef FS_TEXTS_HDR
-#define FS_TEXTS_HDR
+#ifndef FS_GUI_HDR
+#define FS_GUI_HDR
 
-namespace FSTexts {
+namespace FSGui {
 	const char* AboutText =
 		"FSC is a game based upon the falling sand/powder style games of the late 2000s. \
 As with most falling sand games, it involves a particle simulation where each \
@@ -14,4 +14,5 @@ with OpenGL compute shaders, and a heavy focus on user interaction and customiza
 This game was created as a final project for the Graphics class at Seattle University in the fall \
 of 2021 by Devon McKee and Michael Pablo.";
 };
-#endif // FS_TEXTS_HDR
+
+#endif // FS_GUI_HDR
