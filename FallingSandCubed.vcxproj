@@ -170,7 +170,6 @@
     <None Include="gridRender.frag" />
     <None Include="gridRender.vert" />
     <None Include="render.frag" />
-    <None Include="gridRender.geom" />
     <None Include="render.vert" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />

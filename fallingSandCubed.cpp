@@ -39,14 +39,13 @@ time_t start;
 int livingParticles = 0;
 
 // Colors
-float bgColor[3] = { 0.4f, 0.4f, 0.4f };
-float brushColor[3] = { 1.0f, 0.0f, 0.0f };
-float stoneColor[3] = { 0.5f, 0.5f, 0.5f };
-float waterColor[3] = { 0.1f, 0.1f, 0.7f };
-float sandColor[3] = { 0.906f, 0.702f, 0.498f };
-float oilColor[3] = { 0.133f, 0.067f, 0.223f };
-float saltColor[3] = { 0.902f, 0.906f, 0.910f };
-float liquidTranslucence = 0.5f;
+float bgColor[4] = { 0.4f, 0.4f, 0.4f, 1.0f };
+float brushColor[4] = { 1.0f, 0.0f, 0.0f, 1.0f };
+float stoneColor[4] = { 0.5f, 0.5f, 0.5f, 1.0f };
+float waterColor[4] = { 0.1f, 0.1f, 0.7f, 0.5f };
+float sandColor[4] = { 0.906f, 0.702f, 0.498f, 1.0f };
+float oilColor[4] = { 0.133f, 0.067f, 0.223f, 0.5f };
+float saltColor[4] = { 0.902f, 0.906f, 0.910f, 1.0f };
 
 // Window show toggles
 static bool showAbout = false;
@@ -181,19 +180,19 @@ void RenderGrid() {
 					SetUniform(renderProgram, "modelview", camera.modelview * trans * scale);
 					switch (grid.grid[i][j][k]) {
 						case STONE:
-							SetUniform(renderProgram, "color", vec4(stoneColor[0], stoneColor[1], stoneColor[2], 1.0f));
+							SetUniform(renderProgram, "color", vec4(stoneColor[0], stoneColor[1], stoneColor[2], stoneColor[3]));
 							break;
 						case WATER:
-							SetUniform(renderProgram, "color", vec4(waterColor[0], waterColor[1], waterColor[2], liquidTranslucence));
+							SetUniform(renderProgram, "color", vec4(waterColor[0], waterColor[1], waterColor[2], waterColor[3]));
 							break;
 						case SAND:
-							SetUniform(renderProgram, "color", vec4(sandColor[0], sandColor[1], sandColor[2], 1.0f));
+							SetUniform(renderProgram, "color", vec4(sandColor[0], sandColor[1], sandColor[2], sandColor[3]));
 							break;
 						case OIL:
-							SetUniform(renderProgram, "color", vec4(oilColor[0], oilColor[1], oilColor[2], liquidTranslucence));
+							SetUniform(renderProgram, "color", vec4(oilColor[0], oilColor[1], oilColor[2], oilColor[3]));
 							break;
 						case SALT:
-							SetUniform(renderProgram, "color", vec4(saltColor[0], saltColor[1], saltColor[2], 1.0f));
+							SetUniform(renderProgram, "color", vec4(saltColor[0], saltColor[1], saltColor[2], saltColor[3]));
 							break;
 					}
 					glDrawElements(GL_TRIANGLES, 36, GL_UNSIGNED_INT, cube_triangles);
@@ -216,7 +215,7 @@ void RenderDropper() {
 	mat4 scale = Scale((float)(1.0f / GRID_SIZE));
 	mat4 trans = Translate((brushPos.x - (GRID_SIZE / 2) + 0.5) * (2.0f / GRID_SIZE), (brushPos.y - (GRID_SIZE / 2) + 0.5) * (2.0f / GRID_SIZE), (brushPos.z - (GRID_SIZE / 2) + 0.5) * (2.0f / GRID_SIZE));
 	SetUniform(renderProgram, "modelview", camera.modelview * trans * scale);
-	SetUniform(renderProgram, "color", vec4(brushColor[0], brushColor[1], brushColor[2], 1.0f));
+	SetUniform(renderProgram, "color", vec4(brushColor[0], brushColor[1], brushColor[2], brushColor[3]));
 	glDrawElements(GL_TRIANGLES, 36, GL_UNSIGNED_INT, cube_triangles);
 }
 
@@ -506,13 +505,13 @@ void RenderImGui() {
 		ImGui::EndMenu();
 	}
 	if (ImGui::BeginMenu("Colors")) {
-		ImGui::ColorEdit3("BG Color", bgColor);
-		ImGui::ColorEdit3("Dropper Color", brushColor);
-		ImGui::ColorEdit3("Stone Color", stoneColor);
-		ImGui::ColorEdit3("Water Color", waterColor);
-		ImGui::ColorEdit3("Sand Color", sandColor);
-		ImGui::ColorEdit3("Oil Color", oilColor);
-		ImGui::ColorEdit3("Salt Color", saltColor);
+		ImGui::ColorEdit4("BG Color", bgColor);
+		ImGui::ColorEdit4("Dropper Color", brushColor);
+		ImGui::ColorEdit4("Stone Color", stoneColor);
+		ImGui::ColorEdit4("Water Color", waterColor);
+		ImGui::ColorEdit4("Sand Color", sandColor);
+		ImGui::ColorEdit4("Oil Color", oilColor);
+		ImGui::ColorEdit4("Salt Color", saltColor);
 		ImGui::EndMenu();
 	}
 	if (ImGui::BeginMenu("Debug")) {
@@ -535,7 +534,7 @@ void RenderImGui() {
 }
 
 void Display() {
-	glClearColor(bgColor[0], bgColor[1], bgColor[2], 1.0f);
+	glClearColor(bgColor[0], bgColor[1], bgColor[2], bgColor[3]);
 	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 	cube.display(camera);
 	RenderGrid();

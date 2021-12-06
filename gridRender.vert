@@ -4,10 +4,6 @@ const int GRID_SIZE = 64;
 
 in vec3 point;
 
-layout (std430, binding = 0) buffer grid_buffer {
-	uint grid[GRID_SIZE][GRID_SIZE][GRID_SIZE];
-};
-
 uniform vec4 colors[];
 uniform mat4 persp;
 uniform mat4 modelview;
