@@ -23,7 +23,7 @@ using std::vector;
 using std::string;
 
 GLuint computeProgram = 0, srcBuffer = 0, dstBuffer = 0;
-GLuint renderProgram = 0, geomRenderProgram = 0;
+GLuint renderProgram = 0, gridRenderProgram = 0;
 GLuint tempCubeBuffer = 0;
 
 const int GRID_SIZE = 64;
@@ -34,13 +34,13 @@ Camera camera((float)win_width / win_height, vec3(0, 0, 0), vec3(0, 0, -5));
 GLFWwindow* window;
 vec3 lightPos = vec3(1, 1, 0);
 dCube cube;
-vec3 dropperPos = vec3((int)(GRID_SIZE / 2), (int)(GRID_SIZE - 3), (int)(GRID_SIZE / 2));
+vec3 brushPos = vec3((int)(GRID_SIZE / 2), (int)(GRID_SIZE - 3), (int)(GRID_SIZE / 2));
 time_t start;
 int livingParticles = 0;
 
 // Colors
 float bgColor[3] = { 0.4f, 0.4f, 0.4f };
-float dropperColor[3] = { 1.0f, 0.0f, 0.0f };
+float brushColor[3] = { 1.0f, 0.0f, 0.0f };
 float stoneColor[3] = { 0.5f, 0.5f, 0.5f };
 float waterColor[3] = { 0.1f, 0.1f, 0.7f };
 float sandColor[3] = { 0.906f, 0.702f, 0.498f };
@@ -135,7 +135,7 @@ struct ParticleGrid {
 	}
 	void render() {
 		// Send necessary data to tess shaders
-		glUseProgram(geomRenderProgram);
+		glUseProgram(gridRenderProgram);
 
 	}
 	
@@ -154,32 +154,11 @@ void CompileShaders() {
 		fprintf(stderr, "SHADER: Error linking render shader! Exiting...\n");
 		exit(1);
 	}
-	geomRenderProgram = LinkProgramViaFile("gridRender.vert", "gridRender.frag");
-	if (!geomRenderProgram) {
+	gridRenderProgram = LinkProgramViaFile("gridRender.vert", "gridRender.frag");
+	if (!gridRenderProgram) {
 		fprintf(stderr, "SHADER: Error linking grid render shader! Exiting...\n");
 		exit(1);
 	}
-	/*
-	GLuint vshader = CompileShaderViaFile("gridRender.vert", GL_VERTEX_SHADER);
-	if (!vshader) {
-		fprintf(stderr, "SHADER: Error compiling vertex shader! Exiting...\n");
-		exit(1);
-	}
-	GLuint gshader = CompileShaderViaFile("gridRender.geom", GL_GEOMETRY_SHADER);
-	if (!gshader) {
-		fprintf(stderr, "SHADER: Error compiling geometry shader! Exiting...\n");
-		exit(1);
-	}
-	GLuint fshader = CompileShaderViaFile("gridRender.frag", GL_FRAGMENT_SHADER);
-	if (!fshader) {
-		fprintf(stderr, "SHADER: Error compiling fragment shader! Exiting...\n");
-		exit(1);
-	}
-	geomRenderProgram = LinkProgram(vshader, NULL, NULL, gshader, fshader);
-	if (!geomRenderProgram) {
-		fprintf(stderr, "SHADER: Error linking render program! Exiting...\n");
-		exit(1);
-	} */
 }
 
 void RenderGrid() {
@@ -235,9 +214,9 @@ void RenderDropper() {
 	SetUniform(renderProgram, "persp", camera.persp);
 	SetUniform(renderProgram, "light_pos", lightPos);
 	mat4 scale = Scale((float)(1.0f / GRID_SIZE));
-	mat4 trans = Translate((dropperPos.x - (GRID_SIZE / 2) + 0.5) * (2.0f / GRID_SIZE), (dropperPos.y - (GRID_SIZE / 2) + 0.5) * (2.0f / GRID_SIZE), (dropperPos.z - (GRID_SIZE / 2) + 0.5) * (2.0f / GRID_SIZE));
+	mat4 trans = Translate((brushPos.x - (GRID_SIZE / 2) + 0.5) * (2.0f / GRID_SIZE), (brushPos.y - (GRID_SIZE / 2) + 0.5) * (2.0f / GRID_SIZE), (brushPos.z - (GRID_SIZE / 2) + 0.5) * (2.0f / GRID_SIZE));
 	SetUniform(renderProgram, "modelview", camera.modelview * trans * scale);
-	SetUniform(renderProgram, "color", vec4(dropperColor[0], dropperColor[1], dropperColor[2], 1.0f));
+	SetUniform(renderProgram, "color", vec4(brushColor[0], brushColor[1], brushColor[2], 1.0f));
 	glDrawElements(GL_TRIANGLES, 36, GL_UNSIGNED_INT, cube_triangles);
 }
 
@@ -325,30 +304,30 @@ void S_Keyboard(GLFWwindow* window, int key, int scancode, int action, int mods)
 			if (glfwGetKey(window, GLFW_KEY_LEFT_ALT) == GLFW_PRESS) grid.clear();
 			break;
 		case GLFW_KEY_SPACE:
-			WriteSphere(dropperPos, brushRadius, brushElement);
+			WriteSphere(brushPos, brushRadius, brushElement);
 			break;
 		case GLFW_KEY_H:
 			if (glfwGetKey(window, GLFW_KEY_LEFT_CONTROL) == GLFW_PRESS) showHelp = true;
 			break;
 		case GLFW_KEY_W:
-			if (dropperPos.x < GRID_SIZE - 1)
-				dropperPos.x += 1;
+			if (brushPos.x < GRID_SIZE - 1)
+				brushPos.x += 1;
 			break;
 		case GLFW_KEY_S:
-			if (dropperPos.x > 0)
-				dropperPos.x -= 1;
+			if (brushPos.x > 0)
+				brushPos.x -= 1;
 			break;
 		case GLFW_KEY_D:
-			if (dropperPos.z < GRID_SIZE - 1)
-				dropperPos.z += 1;
+			if (brushPos.z < GRID_SIZE - 1)
+				brushPos.z += 1;
 			break;
 		case GLFW_KEY_A:
 			if (glfwGetKey(window, GLFW_KEY_LEFT_CONTROL) == GLFW_PRESS) {
 				showAbout = true;
 				return;
 			}
-			if (dropperPos.z > 0)
-				dropperPos.z -= 1;
+			if (brushPos.z > 0)
+				brushPos.z -= 1;
 			break;
 		case GLFW_KEY_Q:
 			if (glfwGetKey(window, GLFW_KEY_LEFT_CONTROL) == GLFW_PRESS) {
@@ -357,13 +336,18 @@ void S_Keyboard(GLFWwindow* window, int key, int scancode, int action, int mods)
 			if (glfwGetKey(window, GLFW_KEY_LEFT_ALT) == GLFW_PRESS) {
 				grid.clear(); return;
 			}
-			if (dropperPos.y < GRID_SIZE - 1)
-				dropperPos.y += 1;
+			if (brushPos.y < GRID_SIZE - 1)
+				brushPos.y += 1;
 			break;
 		case GLFW_KEY_E:
-			if (dropperPos.y > 0)
-				dropperPos.y -= 1;
+			if (brushPos.y > 0)
+				brushPos.y -= 1;
 			break;
+		case GLFW_KEY_O:
+			if (glfwGetKey(window, GLFW_KEY_LEFT_CONTROL) == GLFW_PRESS) {
+				showOverlay = true;
+				return;
+			}
 		case GLFW_KEY_1:
 			ChangeBrush(AIR);
 			break;
@@ -455,7 +439,7 @@ void ShowOverlayWindow(bool* p_open) {
 	if (ImGui::Begin("Overlay", p_open, window_flags)) {
 		ImGui::Text("Framerate: %.0f fps", io.Framerate);
 		ImGui::Text("Particles: %i", livingParticles);
-		ImGui::Text("Brush: (%i,%i,%i)", (int)dropperPos.x, (int)dropperPos.y, (int)dropperPos.z);
+		ImGui::Text("Brush: (%i,%i,%i)", (int)brushPos.x, (int)brushPos.y, (int)brushPos.z);
 		ImGui::Text("Element: %s", brushElementString.c_str());
 		ImGui::Text("Grid: %ix%ix%i", GRID_SIZE, GRID_SIZE, GRID_SIZE);
 		ImGui::Text("(Total %i)", GRID_SIZE * GRID_SIZE * GRID_SIZE);
@@ -523,7 +507,7 @@ void RenderImGui() {
 	}
 	if (ImGui::BeginMenu("Colors")) {
 		ImGui::ColorEdit3("BG Color", bgColor);
-		ImGui::ColorEdit3("Dropper Color", dropperColor);
+		ImGui::ColorEdit3("Dropper Color", brushColor);
 		ImGui::ColorEdit3("Stone Color", stoneColor);
 		ImGui::ColorEdit3("Water Color", waterColor);
 		ImGui::ColorEdit3("Sand Color", sandColor);
