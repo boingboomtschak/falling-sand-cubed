@@ -53,6 +53,7 @@ float saltColor[4] = { 0.902f, 0.906f, 0.910f, 1.0f };
 static bool showAbout = false;
 static bool showHelp = false;
 static bool showOverlay = false;
+static bool showGridStats = false;
 static bool showDemo = false; // debug
 static bool showMetrics = false; // debug
 int overlayCorner = 1; // Defaults to top-right
@@ -81,7 +82,7 @@ struct Particle {
 
 struct ParticleGrid {
 	Particle particles[MAX_PARTICLES];
-	int num_particles = 0;
+	int num_particles = 0, stone = 0, water = 0, sand = 0, oil = 0, salt = 0;
 	GLuint grid[GRID_SIZE][GRID_SIZE][GRID_SIZE];
 	ParticleGrid() {
 		for (int i = 0; i < GRID_SIZE; i++)
@@ -133,7 +134,7 @@ struct ParticleGrid {
 		writeGrid();
 	}
 	void updateParticles() {
-		num_particles = 0;
+		num_particles = 0, stone = 0, water = 0, sand = 0, oil = 0, salt = 0;
 		for (int i = 0; i < GRID_SIZE; i++) {
 			for (int j = 0; j < GRID_SIZE; j++) {
 				for (int k = 0; k < GRID_SIZE; k++) {
@@ -144,6 +145,11 @@ struct ParticleGrid {
 							particles[num_particles].z = k;
 							particles[num_particles].t = grid[i][j][k];
 						}
+						if (grid[i][j][k] == STONE) stone++;
+						if (grid[i][j][k] == WATER) water++;
+						if (grid[i][j][k] == SAND) sand++;
+						if (grid[i][j][k] == OIL) oil++;
+						if (grid[i][j][k] == SALT) salt++;
 						num_particles++;
 					}
 				}
@@ -395,8 +401,10 @@ void S_Keyboard(GLFWwindow* window, int key, int scancode, int action, int mods)
 			break;
 		case GLFW_KEY_O:
 			if (glfwGetKey(window, GLFW_KEY_LEFT_CONTROL) == GLFW_PRESS) {
-				showOverlay = true;
-				return;
+				if (glfwGetKey(window, GLFW_KEY_LEFT_SHIFT) == GLFW_PRESS) {
+					showGridStats = true; return;
+				}
+				showOverlay = true; return;
 			}
 		case GLFW_KEY_1:
 			ChangeBrush(AIR);
@@ -491,8 +499,16 @@ void ShowOverlayWindow(bool* p_open) {
 		ImGui::Text("Particles: %i", grid.num_particles);
 		ImGui::Text("Brush: (%i,%i,%i)", (int)brushPos.x, (int)brushPos.y, (int)brushPos.z);
 		ImGui::Text("Element: %s", brushElementString.c_str());
-		ImGui::Text("Grid: %ix%ix%i", GRID_SIZE, GRID_SIZE, GRID_SIZE);
-		ImGui::Text("(Total %i)", GRID_SIZE * GRID_SIZE * GRID_SIZE);
+		if (showGridStats) {
+			ImGui::Separator();
+			ImGui::Text("Stone: %i", grid.stone);
+			ImGui::Text("Water: %i", grid.water);
+			ImGui::Text("Sand:  %i", grid.sand);
+			ImGui::Text("Oil:   %i", grid.oil);
+			ImGui::Text("Salt:  %i", grid.salt);
+			ImGui::Text("Grid: %ix%ix%i", GRID_SIZE, GRID_SIZE, GRID_SIZE);
+			ImGui::Text("(Total %i)", GRID_SIZE * GRID_SIZE * GRID_SIZE);
+		}
 	}
 	ImGui::End();
 }
@@ -510,10 +526,11 @@ void RenderImGui() {
 		if (ImGui::MenuItem("Help", "CTRL + H", false)) showHelp = !showHelp;
 		if (ImGui::BeginMenu("Overlay")) {
 			if (ImGui::MenuItem("Toggle", "CTRL + O", showOverlay)) showOverlay = !showOverlay;
-			if (ImGui::MenuItem("Top-left", NULL, overlayCorner == 0)) overlayCorner = 0;
-			if (ImGui::MenuItem("Top-right", NULL, overlayCorner == 1)) overlayCorner = 1;
-			if (ImGui::MenuItem("Bottom-left", NULL, overlayCorner == 2)) overlayCorner = 2;
-			if (ImGui::MenuItem("Bottom-right", NULL, overlayCorner == 3)) overlayCorner = 3;
+			if (ImGui::MenuItem("Grid Stats", "CTRL + SHIFT + O", showGridStats && showOverlay, showOverlay)) showGridStats = !showGridStats;
+			if (ImGui::MenuItem("Top-left", NULL, overlayCorner == 0 && showOverlay, showOverlay)) overlayCorner = 0;
+			if (ImGui::MenuItem("Top-right", NULL, overlayCorner == 1 && showOverlay, showOverlay)) overlayCorner = 1;
+			if (ImGui::MenuItem("Bottom-left", NULL, overlayCorner == 2 && showOverlay, showOverlay)) overlayCorner = 2;
+			if (ImGui::MenuItem("Bottom-right", NULL, overlayCorner == 3 && showOverlay, showOverlay)) overlayCorner = 3;
 			ImGui::EndMenu();
 		}
 		if (ImGui::BeginMenu("Themes")) {
