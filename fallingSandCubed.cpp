@@ -22,11 +22,12 @@
 using std::vector;
 using std::string;
 
-GLuint computeProgram = 0, srcBuffer = 0, dstBuffer = 0;
+GLuint computeProgram = 0, particleBuffer = 0, gridBuffer = 0;
 GLuint renderProgram = 0, geomRenderProgram = 0;
 GLuint tempCubeBuffer = 0;
 
 const int GRID_SIZE = 64;
+const int MAX_PARTICLES = GRID_SIZE * GRID_SIZE * GRID_SIZE;
 const char* render_glsl_version = "#version 130";
 
 int win_width = 800, win_height = 800;
@@ -34,13 +35,13 @@ Camera camera((float)win_width / win_height, vec3(0, 0, 0), vec3(0, 0, -5));
 GLFWwindow* window;
 vec3 lightPos = vec3(1, 1, 0);
 dCube cube;
-vec3 dropperPos = vec3((int)(GRID_SIZE / 2), (int)(GRID_SIZE - 3), (int)(GRID_SIZE / 2));
+vec3 brushPos = vec3((int)(GRID_SIZE / 2), (int)(GRID_SIZE - 3), (int)(GRID_SIZE / 2));
 time_t start;
 int livingParticles = 0;
 
 // Colors
 float bgColor[3] = { 0.4f, 0.4f, 0.4f };
-float dropperColor[3] = { 1.0f, 0.0f, 0.0f };
+float brushColor[3] = { 1.0f, 0.0f, 0.0f };
 float stoneColor[3] = { 0.5f, 0.5f, 0.5f };
 float waterColor[3] = { 0.1f, 0.1f, 0.7f };
 float sandColor[3] = { 0.906f, 0.702f, 0.498f };
@@ -74,64 +75,138 @@ int brushElement = SAND;
 string brushElementString = "SAND";
 int brushRadius = 3;
 
+struct Particle {
+	GLint x, y, z, w; // w for padding vec4
+	GLuint lock, type, alive, _padding; // 16 byte alignment
+};
+
 struct ParticleGrid {
+	Particle particles[MAX_PARTICLES];
+	int num_particles = 0;
 	GLuint grid[GRID_SIZE][GRID_SIZE][GRID_SIZE];
 	ParticleGrid() {
 		for (int i = 0; i < GRID_SIZE; i++)
 			for (int j = 0; j < GRID_SIZE; j++)
 				for (int k = 0; k < GRID_SIZE; k++)
-					grid[i][j][k] = AIR;
+					grid[i][j][k] = 0;
+		for (size_t i = 0; i < MAX_PARTICLES; i++) {
+			particles[i] = Particle();
+			particles[i].lock = 0; 
+			particles[i].type = AIR; 
+			particles[i].alive = 0;
+		}
+	}
+	void addParticle(vec3 pos, int type) {
+		int g_index = grid[(int)pos.x][(int)pos.y][(int)pos.z];
+		if (g_index == 0) {
+			if (type == AIR) return;
+			for (int i = 0; i < num_particles; i++) {
+				if (particles[i].alive == 0) {
+					//fprintf(stderr, "Add: NEW - found from list\n");
+					particles[i].alive = 1;
+					particles[i].type = type;
+					particles[i].x = (int)pos.x;
+					particles[i].y = (int)pos.y;
+					particles[i].z = (int)pos.z;
+					grid[(int)pos.x][(int)pos.y][(int)pos.z] = i + 1;
+					return;
+				}
+			}
+			if (num_particles < MAX_PARTICLES) {
+				//fprintf(stderr, "Add: NEW - added to end\n");
+				particles[num_particles].alive = 1;
+				particles[num_particles].type = type;
+				particles[num_particles].x = (int)pos.x;
+				particles[num_particles].y = (int)pos.y;
+				particles[num_particles].z = (int)pos.z;
+				grid[(int)pos.x][(int)pos.y][(int)pos.z] = num_particles + 1;
+				num_particles++;
+				return;
+			}
+		} else {
+			//fprintf(stderr, "Add: OVERWRITE - in same space\n");
+			particles[g_index - 1].alive = 1;
+			particles[g_index - 1].type = type;
+			particles[g_index - 1].x = (int)pos.x;
+			particles[g_index - 1].y = (int)pos.y;
+			particles[g_index - 1].z = (int)pos.z;
+			return;
+		}
+	}
+	void percolateParticles() {
+		// Force particles to fill all missing spaces (array [0 : num_particles - 1] are all alive)
+		// Must update grid with new indices to moved particles
+		// Update num_particles at end
+		//for (int i = 0; i < MAX_PARTICLES; i++) {
+
+		//}
+	}
+	void writeParticles() {
+		percolateParticles();
+		glBindBuffer(GL_SHADER_STORAGE_BUFFER, particleBuffer);
+		GLvoid* buf = glMapBuffer(GL_SHADER_STORAGE_BUFFER, GL_WRITE_ONLY);
+		memcpy(buf, &particles, sizeof(Particle) * num_particles);
+		glUnmapBuffer(GL_SHADER_STORAGE_BUFFER);
+	}
+	void readParticles() {
+		glBindBuffer(GL_SHADER_STORAGE_BUFFER, particleBuffer);
+		//glGetBufferSubData(GL_SHADER_STORAGE_BUFFER, 0, sizeof(Particle) * num_particles, &particles);
+		GLvoid* buf = glMapBuffer(GL_SHADER_STORAGE_BUFFER, GL_READ_ONLY);
+		memcpy(&particles, buf, sizeof(Particle) * num_particles);
+		glUnmapBuffer(GL_SHADER_STORAGE_BUFFER);
 	}
 	void writeGrid() {
-		glBindBuffer(GL_SHADER_STORAGE_BUFFER, srcBuffer);
+		glBindBuffer(GL_SHADER_STORAGE_BUFFER, gridBuffer);
 		GLvoid* buf = glMapBuffer(GL_SHADER_STORAGE_BUFFER, GL_WRITE_ONLY);
 		memcpy(buf, &grid, sizeof(grid));
 		glUnmapBuffer(GL_SHADER_STORAGE_BUFFER);
 	}
 	void readGrid() {
-		glBindBuffer(GL_SHADER_STORAGE_BUFFER, srcBuffer);
+		glBindBuffer(GL_SHADER_STORAGE_BUFFER, gridBuffer);
 		glGetBufferSubData(GL_SHADER_STORAGE_BUFFER, 0, sizeof(grid), &grid);
 	}
 	void loadBuffer() {
-		// Create and write srcBuffer
-		glGenBuffers(1, &srcBuffer);
-		glBindBuffer(GL_SHADER_STORAGE_BUFFER, srcBuffer);
+		glGenBuffers(1, &particleBuffer);
+		glBindBuffer(GL_SHADER_STORAGE_BUFFER, particleBuffer);
+		glBufferData(GL_SHADER_STORAGE_BUFFER, sizeof(particles), NULL, GL_DYNAMIC_COPY);
+		// Create and write gridBuffer
+		glGenBuffers(1, &gridBuffer);
+		glBindBuffer(GL_SHADER_STORAGE_BUFFER, gridBuffer);
 		glBufferData(GL_SHADER_STORAGE_BUFFER, sizeof(grid), NULL, GL_DYNAMIC_COPY);
 		writeGrid();
-		// Create dstBuffer
-		glGenBuffers(1, &dstBuffer);
-		glBindBuffer(GL_SHADER_STORAGE_BUFFER, dstBuffer);
-		glBufferData(GL_SHADER_STORAGE_BUFFER, sizeof(grid), NULL, GL_DYNAMIC_COPY);
 	}
 	void unloadBuffer() {
 		glBindBuffer(GL_SHADER_STORAGE_BUFFER, 0);
-		glDeleteBuffers(1, &srcBuffer);
-		glDeleteBuffers(1, &dstBuffer);
+		glDeleteBuffers(1, &particleBuffer);
+		glDeleteBuffers(1, &gridBuffer);
 	}
 	void clear() {
+		for (int i = 0; i < MAX_PARTICLES; i++) {
+			particles[i].alive = 0;
+		}
+		num_particles = 0;
 		for (int i = 0; i < GRID_SIZE; i++)
 			for (int j = 0; j < GRID_SIZE; j++)
 				for (int k = 0; k < GRID_SIZE; k++)
-					grid[i][j][k] = AIR;
-		writeGrid();
+					grid[i][j][k] = 0;
+
 	}
 	void compute() {
-		// Copy src to dst (dst will be modified by compute program)
-		glBindBuffer(GL_COPY_READ_BUFFER, srcBuffer);
-		glBindBuffer(GL_COPY_WRITE_BUFFER, dstBuffer);
-		glCopyBufferSubData(GL_COPY_READ_BUFFER, GL_COPY_WRITE_BUFFER, 0, 0, sizeof(grid));
-		// Dispatch compute shader
-		glUseProgram(computeProgram);
-		glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 0, srcBuffer);
-		glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 1, dstBuffer);
-		SetUniform(computeProgram, "rngSeed", (int)(clock() - start));
-		glDispatchCompute(GRID_SIZE, GRID_SIZE, GRID_SIZE);
-		// Wait for writes to memory to finish
-		glMemoryBarrier(GL_ALL_BARRIER_BITS);
-		// Copy dst to src
-		glBindBuffer(GL_COPY_READ_BUFFER, dstBuffer);
-		glBindBuffer(GL_COPY_WRITE_BUFFER, srcBuffer);
-		glCopyBufferSubData(GL_COPY_READ_BUFFER, GL_COPY_WRITE_BUFFER, 0, 0, sizeof(grid));
+		if (num_particles > 0) {
+			writeParticles();
+			writeGrid();
+			// Dispatch compute shader
+			glUseProgram(computeProgram);
+			glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 0, particleBuffer);
+			glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 1, gridBuffer);
+			//SetUniform(computeProgram, "rng_seed", (int)(clock() - start));
+			glDispatchCompute(num_particles - 1, 1, 1);
+			// Wait for writes to memory to finish
+			glMemoryBarrier(GL_ALL_BARRIER_BITS);
+			readParticles();
+			readGrid();
+			percolateParticles();
+		}
 	}
 	void render() {
 		// Send necessary data to tess shaders
@@ -193,38 +268,38 @@ void RenderGrid() {
 	VertexAttribPointer(renderProgram, "normal", 3, 0, (void*)(sizeof(cube_points)));
 	SetUniform(renderProgram, "persp", camera.persp);
 	SetUniform(renderProgram, "light_pos", lightPos);
-	for (int i = 0; i < GRID_SIZE; i++) {
-		for (int j = 0; j < GRID_SIZE; j++) {
-			for (int k = 0; k < GRID_SIZE; k++) {
-				if (grid.grid[i][j][k] != AIR) {
-					mat4 scale = Scale((float)(1.0f / GRID_SIZE));
-					mat4 trans = Translate((i - (GRID_SIZE / 2) + 0.5) * (2.0f / GRID_SIZE), (j - (GRID_SIZE / 2) + 0.5) * (2.0f / GRID_SIZE), (k - (GRID_SIZE / 2) + 0.5) * (2.0f / GRID_SIZE));
-					SetUniform(renderProgram, "modelview", camera.modelview * trans * scale);
-					switch (grid.grid[i][j][k]) {
-						case STONE:
-							SetUniform(renderProgram, "color", vec4(stoneColor[0], stoneColor[1], stoneColor[2], 1.0f));
-							break;
-						case WATER:
-							SetUniform(renderProgram, "color", vec4(waterColor[0], waterColor[1], waterColor[2], liquidTranslucence));
-							break;
-						case SAND:
-							SetUniform(renderProgram, "color", vec4(sandColor[0], sandColor[1], sandColor[2], 1.0f));
-							break;
-						case OIL:
-							SetUniform(renderProgram, "color", vec4(oilColor[0], oilColor[1], oilColor[2], liquidTranslucence));
-							break;
-						case SALT:
-							SetUniform(renderProgram, "color", vec4(saltColor[0], saltColor[1], saltColor[2], 1.0f));
-							break;
-					}
-					glDrawElements(GL_TRIANGLES, 36, GL_UNSIGNED_INT, cube_triangles);
-				}
+	for (int i = 0; i < grid.num_particles; i++) {
+		if (grid.particles[i].alive == 1) {
+			mat4 scale = Scale((float)(1.0f / GRID_SIZE));
+			mat4 trans = Translate(
+				(grid.particles[i].x - (GRID_SIZE / 2) + 0.5) * (2.0f / GRID_SIZE), 
+				(grid.particles[i].y - (GRID_SIZE / 2) + 0.5) * (2.0f / GRID_SIZE), 
+				(grid.particles[i].z - (GRID_SIZE / 2) + 0.5) * (2.0f / GRID_SIZE)
+			);
+			SetUniform(renderProgram, "modelview", camera.modelview * trans * scale);
+			switch (grid.particles[i].type) {
+				case STONE:
+					SetUniform(renderProgram, "color", vec4(stoneColor[0], stoneColor[1], stoneColor[2], 1.0f));
+					break;
+				case WATER:
+					SetUniform(renderProgram, "color", vec4(waterColor[0], waterColor[1], waterColor[2], liquidTranslucence));
+					break;
+				case SAND:
+					SetUniform(renderProgram, "color", vec4(sandColor[0], sandColor[1], sandColor[2], 1.0f));
+					break;
+				case OIL:
+					SetUniform(renderProgram, "color", vec4(oilColor[0], oilColor[1], oilColor[2], liquidTranslucence));
+					break;
+				case SALT:
+					SetUniform(renderProgram, "color", vec4(saltColor[0], saltColor[1], saltColor[2], 1.0f));
+					break;
 			}
+			glDrawElements(GL_TRIANGLES, 36, GL_UNSIGNED_INT, cube_triangles);
 		}
 	}
 }
 
-void RenderDropper() {
+void RenderBrush() {
 	glUseProgram(renderProgram);
 	glEnable(GL_BLEND);
 	glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
@@ -235,14 +310,13 @@ void RenderDropper() {
 	SetUniform(renderProgram, "persp", camera.persp);
 	SetUniform(renderProgram, "light_pos", lightPos);
 	mat4 scale = Scale((float)(1.0f / GRID_SIZE));
-	mat4 trans = Translate((dropperPos.x - (GRID_SIZE / 2) + 0.5) * (2.0f / GRID_SIZE), (dropperPos.y - (GRID_SIZE / 2) + 0.5) * (2.0f / GRID_SIZE), (dropperPos.z - (GRID_SIZE / 2) + 0.5) * (2.0f / GRID_SIZE));
+	mat4 trans = Translate((brushPos.x - (GRID_SIZE / 2) + 0.5) * (2.0f / GRID_SIZE), (brushPos.y - (GRID_SIZE / 2) + 0.5) * (2.0f / GRID_SIZE), (brushPos.z - (GRID_SIZE / 2) + 0.5) * (2.0f / GRID_SIZE));
 	SetUniform(renderProgram, "modelview", camera.modelview * trans * scale);
-	SetUniform(renderProgram, "color", vec4(dropperColor[0], dropperColor[1], dropperColor[2], 1.0f));
+	SetUniform(renderProgram, "color", vec4(brushColor[0], brushColor[1], brushColor[2], 1.0f));
 	glDrawElements(GL_TRIANGLES, 36, GL_UNSIGNED_INT, cube_triangles);
 }
 
 void WriteSphere(vec3 center, int radius, int pType) {
-	grid.readGrid();
 	int xmin = center.x - radius; xmin = xmin > 0 ? xmin : 0;
 	int xmax = center.x + radius; xmax = xmax < GRID_SIZE ? xmax : GRID_SIZE - 1;
 	int ymin = center.y - radius; ymin = ymin > 0 ? ymin : 0;
@@ -255,22 +329,11 @@ void WriteSphere(vec3 center, int radius, int pType) {
 				vec3 p = vec3(i, j, k);
 				float p_dist = dist(center, p);
 				if (p_dist <= radius) {
-					grid.grid[i][j][k] = pType;
+					grid.addParticle(vec3(i, j, k), pType);
 				}
 			}
 		}
 	}
-	grid.writeGrid();
-}
-
-int FindLivingParticles() {
-	int p = 0;
-	for (size_t i = 0; i < GRID_SIZE; i++)
-		for (size_t j = 0; j < GRID_SIZE; j++)
-			for (size_t k = 0; k < GRID_SIZE; k++)
-				if (grid.grid[i][j][k] != AIR)
-					p++;
-	return p;
 }
 
 void ChangeBrush(int pType) {
@@ -325,30 +388,30 @@ void S_Keyboard(GLFWwindow* window, int key, int scancode, int action, int mods)
 			if (glfwGetKey(window, GLFW_KEY_LEFT_ALT) == GLFW_PRESS) grid.clear();
 			break;
 		case GLFW_KEY_SPACE:
-			WriteSphere(dropperPos, brushRadius, brushElement);
+			WriteSphere(brushPos, brushRadius, brushElement);
 			break;
 		case GLFW_KEY_H:
 			if (glfwGetKey(window, GLFW_KEY_LEFT_CONTROL) == GLFW_PRESS) showHelp = true;
 			break;
 		case GLFW_KEY_W:
-			if (dropperPos.x < GRID_SIZE - 1)
-				dropperPos.x += 1;
+			if (brushPos.x < GRID_SIZE - 1)
+				brushPos.x += 1;
 			break;
 		case GLFW_KEY_S:
-			if (dropperPos.x > 0)
-				dropperPos.x -= 1;
+			if (brushPos.x > 0)
+				brushPos.x -= 1;
 			break;
 		case GLFW_KEY_D:
-			if (dropperPos.z < GRID_SIZE - 1)
-				dropperPos.z += 1;
+			if (brushPos.z < GRID_SIZE - 1)
+				brushPos.z += 1;
 			break;
 		case GLFW_KEY_A:
 			if (glfwGetKey(window, GLFW_KEY_LEFT_CONTROL) == GLFW_PRESS) {
 				showAbout = true;
 				return;
 			}
-			if (dropperPos.z > 0)
-				dropperPos.z -= 1;
+			if (brushPos.z > 0)
+				brushPos.z -= 1;
 			break;
 		case GLFW_KEY_Q:
 			if (glfwGetKey(window, GLFW_KEY_LEFT_CONTROL) == GLFW_PRESS) {
@@ -357,13 +420,18 @@ void S_Keyboard(GLFWwindow* window, int key, int scancode, int action, int mods)
 			if (glfwGetKey(window, GLFW_KEY_LEFT_ALT) == GLFW_PRESS) {
 				grid.clear(); return;
 			}
-			if (dropperPos.y < GRID_SIZE - 1)
-				dropperPos.y += 1;
+			if (brushPos.y < GRID_SIZE - 1)
+				brushPos.y += 1;
 			break;
 		case GLFW_KEY_E:
-			if (dropperPos.y > 0)
-				dropperPos.y -= 1;
+			if (brushPos.y > 0)
+				brushPos.y -= 1;
 			break;
+		case GLFW_KEY_O:
+			if (glfwGetKey(window, GLFW_KEY_LEFT_CONTROL) == GLFW_PRESS) {
+				showOverlay = true;
+				return;
+			}
 		case GLFW_KEY_1:
 			ChangeBrush(AIR);
 			break;
@@ -435,6 +503,7 @@ void ShowHelpWindow(bool* p_open) {
 		ImGui::BulletText("Use the numeric keys (1-6) to quick select an \nelement, or use the 'Brush' tab on the menu bar \nabove.");
 		ImGui::BulletText("Most functions can be accessed using the menu bar,\nand certain options have an associated key \ncombination shown next to them.");
 		ImGui::End();
+
 	}
 }
 
@@ -454,8 +523,8 @@ void ShowOverlayWindow(bool* p_open) {
 	ImGui::SetNextWindowBgAlpha(0.35f); 
 	if (ImGui::Begin("Overlay", p_open, window_flags)) {
 		ImGui::Text("Framerate: %.0f fps", io.Framerate);
-		ImGui::Text("Particles: %i", livingParticles);
-		ImGui::Text("Brush: (%i,%i,%i)", (int)dropperPos.x, (int)dropperPos.y, (int)dropperPos.z);
+		ImGui::Text("Particles: %i", grid.num_particles + 1);
+		ImGui::Text("Brush: (%i,%i,%i)", (int)brushPos.x, (int)brushPos.y, (int)brushPos.z);
 		ImGui::Text("Element: %s", brushElementString.c_str());
 		ImGui::Text("Grid: %ix%ix%i", GRID_SIZE, GRID_SIZE, GRID_SIZE);
 		ImGui::Text("(Total %i)", GRID_SIZE * GRID_SIZE * GRID_SIZE);
@@ -523,7 +592,7 @@ void RenderImGui() {
 	}
 	if (ImGui::BeginMenu("Colors")) {
 		ImGui::ColorEdit3("BG Color", bgColor);
-		ImGui::ColorEdit3("Dropper Color", dropperColor);
+		ImGui::ColorEdit3("Dropper Color", brushColor);
 		ImGui::ColorEdit3("Stone Color", stoneColor);
 		ImGui::ColorEdit3("Water Color", waterColor);
 		ImGui::ColorEdit3("Sand Color", sandColor);
@@ -556,7 +625,7 @@ void Display() {
 	cube.display(camera);
 	RenderGrid();
 	//grid.render();
-	RenderDropper();
+	RenderBrush();
 	RenderImGui();
 	glFlush();
 }
@@ -592,11 +661,20 @@ int main() {
 	start = clock();
 	while (!glfwWindowShouldClose(window)) {
 		grid.compute();
-		livingParticles = FindLivingParticles();
 		Display();
 		glfwPollEvents();
 		glfwSwapBuffers(window);
 		frame++;
+		int locks = 0, alive = 0;
+		for (int i = 0; i < grid.num_particles; i++) {
+			if (grid.particles[i].lock == 1) locks++;
+			if (grid.particles[i].lock == 1) {
+				fprintf(stderr, "Particle %i | pos: %i %i %i | type: %i | alive: %i | lock: %i\n", i, grid.particles[i].x, grid.particles[i].y, grid.particles[i].z, grid.particles[i].type, grid.particles[i].alive, grid.particles[i].lock);
+			}
+			if (grid.particles[i].alive == 1) alive++;
+		}
+		fprintf(stderr, "Locks: %i | Alive: %i | Num: %i \n", locks, alive, grid.num_particles);
+		grid.addParticle(vec3(32, 62, 32), SAND);
 	}
 	ImGui_ImplOpenGL3_Shutdown();
 	ImGui_ImplGlfw_Shutdown();

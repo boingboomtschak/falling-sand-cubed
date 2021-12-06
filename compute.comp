@@ -3,12 +3,18 @@
 const int GRID_SIZE = 64;
 
 layout(local_size_x = 1, local_size_y = 1, local_size_z = 1) in;
-layout(std430, binding=0) buffer src_buffer {
-	uint srcGrid[GRID_SIZE][GRID_SIZE][GRID_SIZE];
-}; 
-layout (std430, binding=1) buffer dst_buffer {
-	uint dstGrid[GRID_SIZE][GRID_SIZE][GRID_SIZE];
+
+struct Particle {
+	ivec4 pos; // position
+	uint lock, type, alive, _padding;
 };
+layout(std430, binding=0) buffer particle_buffer {
+	Particle particles[];
+};
+layout(std430, binding=1) buffer grid_buffer {
+	uint grid[GRID_SIZE][GRID_SIZE][GRID_SIZE];
+}; 
+layout (location = 2) uniform int rng_seed = 0;
 
 // Particle types
 const int P_AIR = 0;
@@ -18,18 +24,16 @@ const int P_SAND = 3;
 const int P_OIL = 4;
 const int P_SALT = 5;
 
-uniform int rngSeed;
-
 ivec3 inv = ivec3(gl_GlobalInvocationID);
 
 // Generating simplex 3D noise, code by Ian McEwan
 vec4 permute(vec4 x){return mod(((x*34.0)+1.0)*x, 289.0);}
 vec4 taylorInvSqrt(vec4 r){return 1.79284291400159 - 0.85373472095314 * r;}
 float snoise(vec3 v){ 
-  const vec2  C = vec2(1.0/6.0, 1.0/3.0);
-  const vec4  D = vec4(0.0, 0.5, 1.0, 2.0);
-  vec3 i  = floor(v + dot(v, C.yyy));
-  vec3 x0 =   v - i + dot(i, C.xxx);
+  const vec2 C = vec2(1.0/6.0, 1.0/3.0);
+  const vec4 D = vec4(0.0, 0.5, 1.0, 2.0);
+  vec3 i = floor(v + dot(v, C.yyy));
+  vec3 x0 = v - i + dot(i, C.xxx);
   vec3 g = step(x0.yzx, x0.xyz);
   vec3 l = 1.0 - g;
   vec3 i1 = min( g.xyz, l.zxy );
@@ -38,7 +42,7 @@ float snoise(vec3 v){
   vec3 x2 = x0 - i2 + 2.0 * C.xxx;
   vec3 x3 = x0 - 1. + 3.0 * C.xxx;
   i = mod(i, 289.0 ); 
-  vec4 p = permute( permute( permute(i.z + vec4(0.0, i1.z, i2.z, 1.0)) + i.y + vec4(0.0, i1.y, i2.y, 1.0 )) + i.x + vec4(0.0, i1.x, i2.x, 1.0 ));
+  vec4 p = permute(permute(permute(i.z + vec4(0.0, i1.z, i2.z, 1.0)) + i.y + vec4(0.0, i1.y, i2.y, 1.0)) + i.x + vec4(0.0, i1.x, i2.x, 1.0));
   float n_ = 1.0/7.0; // N=7
   vec3  ns = n_ * D.wyz - D.xzx;
   vec4 j = p - 49.0 * floor(p * ns.z *ns.z);  //  mod(p,N*N)
@@ -47,8 +51,8 @@ float snoise(vec3 v){
   vec4 x = x_ *ns.x + ns.yyyy;
   vec4 y = y_ *ns.x + ns.yyyy;
   vec4 h = 1.0 - abs(x) - abs(y);
-  vec4 b0 = vec4( x.xy, y.xy );
-  vec4 b1 = vec4( x.zw, y.zw );
+  vec4 b0 = vec4(x.xy, y.xy);
+  vec4 b1 = vec4(x.zw, y.zw);
   vec4 s0 = floor(b0)*2.0 + 1.0;
   vec4 s1 = floor(b1)*2.0 + 1.0;
   vec4 sh = -step(h, vec4(0.0));
@@ -65,21 +69,25 @@ float snoise(vec3 v){
   p3 *= norm.w;
   vec4 m = max(0.6 - vec4(dot(x0,x0), dot(x1,x1), dot(x2,x2), dot(x3,x3)), 0.0);
   m = m * m;
-  return 42.0 * dot( m*m, vec4( dot(p0,x0), dot(p1,x1), dot(p2,x2), dot(p3,x3) ) );
+  return 42.0 * dot(m*m, vec4( dot(p0,x0), dot(p1,x1), dot(p2,x2), dot(p3,x3)));
 }
 
 void shuffleMoves(inout uint[4] arr) {
 	for (uint i = 0; i < 4; i++) {
-		uint a = uint(floor(snoise(vec3(rngSeed + inv.x, inv.z, inv.y + i)) * 3.0));
-		uint b = uint(floor(snoise(vec3(rngSeed + inv.z, inv.x, inv.y - i)) * 3.0));
+		uint a = uint(floor(snoise(vec3(rng_seed + inv.x, inv.z, inv.y + i)) * 3.0));
+		uint b = uint(floor(snoise(vec3(rng_seed + inv.z, inv.x, inv.y - i)) * 3.0));
 		uint c = arr[a];
 		arr[a] = arr[b];
 		arr[b] = c;
 	}
 }
 
-bool isLiquid(uint p) {
-	switch (p) {
+void acquireLock(inout int lock) {
+	bool acquiredLock = false;
+}
+
+bool isLiquid(uint pt) {
+	switch (pt) {
 		case P_WATER:
 			return true;
 		case P_OIL:
@@ -88,8 +96,8 @@ bool isLiquid(uint p) {
 	return false;
 }
 
-bool isMovableSolid(uint p) {
-	switch(p) {
+bool isMovableSolid(uint pt) {
+	switch(pt) {
 		case P_SAND:
 			return true;
 		case P_SALT:
@@ -98,27 +106,123 @@ bool isMovableSolid(uint p) {
 	return false;
 }
 
-bool isImmovableSolid(uint p) {
-	switch(p) {
+bool isImmovableSolid(uint pt) {
+	switch(pt) {
 		case P_STONE:
 			return true;
 	}
 	return false;
 }
 
-bool isGas(uint p) {
+bool isGas(uint pt) {
 	return false;
 }
 
-void processLiquids(uint x, uint y, uint z) {
-	uint p = srcGrid[x][y][z];
+void processLiquid(inout Particle p) {
+	
+}
+
+void processMovableSolid(inout Particle p) {
+	if (p.pos.y > 0) {
+		// Try to move down
+		uint b = 0;
+		do {
+			if (grid[p.pos.x][p.pos.y - 1][p.pos.z] == 0) {
+				// Nothing below, try to occupy index
+				if (atomicCompSwap(grid[p.pos.x][p.pos.y - 1][p.pos.z], 0, 1) == 0) {
+					b = 1; // Acquired empty spot below, no problems
+				}
+			} else {
+				uint n_index = grid[p.pos.x][p.pos.y - 1][p.pos.z];
+				bool acquiredLock = false;
+				do {
+					if (grid[p.pos.x][p.pos.y - 1][p.pos.z] != n_index) break;
+					if (particles[n_index - 1].lock == 0) {
+						if (atomicCompSwap(particles[n_index - 1].lock, 0, 1) == 0) {
+							acquiredLock = true;
+						}
+					}
+				} while (!acquiredLock);
+				if (acquiredLock) {
+					uint pt = particles[n_index - 1].type;
+					if (isLiquid(pt) || isGas(pt)) {
+						b = 2; // Acquired lock of spot below, is a block we can swap with
+					} else {
+						particles[n_index - 1].lock = 0; 
+						b = 3; // Spot below is not a block we can swap with, release it and try new move
+					}
+				}
+			}
+		} while (b == 0);
+		if (b == 1) {
+			p.pos.y -= 1;
+			grid[p.pos.x][p.pos.y][p.pos.z] = 0;
+			p.lock = 0;
+			return;
+		} else if (b == 2) {
+			uint n_index = grid[p.pos.x][p.pos.y - 1][p.pos.z];
+			grid[p.pos.x][p.pos.y][p.pos.z] = n_index;
+			grid[p.pos.x][p.pos.y - 1][p.pos.z] = inv.x + 1;
+			particles[n_index - 1].pos.y += 1;
+			p.pos.y -= 1;
+			particles[n_index - 1].lock = 0;
+			p.lock = 0;
+			return;
+		}
+
+		// Else, try to move diagonal downwards
+		for (int nx = -1; nx <= 1; nx++) {
+			for (int nz = -1; nz <= 1; nz++) {
+				if ((nx != 0 || nz != 0) && p.pos.x + nx < GRID_SIZE && p.pos.x + nx >= 0 && p.pos.z + nz < GRID_SIZE && p.pos.z + nz >= 0) {
+
+				}
+			}
+		}
+	}
+}
+
+void processImmovableSolid(inout Particle p) {
+	p.lock = 0;
+}
+
+void processGas(inout Particle p) {
+	p.lock = 0;
+}
+
+void main() {
+	Particle p = particles[inv.x];
+	if (p.alive == 0) return;
+	// Try to acquire lock on own particle, spin-lock until acquired
+	bool acquiredLock = false;
+	do {
+		if (particles[inv.x].lock == 0) {
+			if (atomicCompSwap(particles[inv.x].lock, 0, 1) == 0) {
+				acquiredLock = true;
+			}
+		}
+	} while (!acquiredLock);
+	if (isLiquid(p.type)) {
+		processLiquid(particles[inv.x]);
+	} else if (isMovableSolid(p.type)) {
+		processMovableSolid(particles[inv.x]);
+	} else if(isImmovableSolid(p.type)) {
+		processImmovableSolid(particles[inv.x]);
+	} else if (isGas(p.type)) {
+		processGas(particles[inv.x]);
+	}
+}
+
+/*
+void processLiquid(Particle p) {
+	uint x = p.pos.x, y = p.pos.y, z = p.pos.z;
+	uint pt = p.type;
 	// Try to move down
 	if (y > 0) {
-		uint np = srcGrid[x][y-1][z];
+		uint np = grid[x][y-1][z];
 		if (np == P_AIR || isGas(np)) {
-			uint wp = atomicCompSwap(dstGrid[x][y-1][z], np, p);
+			uint wp = atomicCompSwap(grid[x][y-1][z], np, pt);
 			if (wp == np) {
-				atomicExchange(dstGrid[x][y][z], np);
+				atomicExchange(grid[x][y][z], np);
 				return;
 			}
 		}
@@ -144,43 +248,30 @@ void processLiquids(uint x, uint y, uint z) {
 				break;
 		}
 		if (move.x >= 0 && move.x < GRID_SIZE && move.z >= 0 && move.z < GRID_SIZE) {
-			uint np = srcGrid[move.x][move.y][move.z];
+			uint np = grid[move.x][move.y][move.z];
 			if (np == P_AIR || isGas(np)) {
-				uint wp = atomicCompSwap(dstGrid[move.x][move.y][move.z], np, p);
+				uint wp = atomicCompSwap(grid[move.x][move.y][move.z], np, pt);
 				if (wp == np) {
-					atomicExchange(dstGrid[x][y][z], np);
+					atomicExchange(grid[x][y][z], np);
 					return;
 				}
 			}
 		}
 	}
-	/*
-	for (int nx = 1; nx >= -1; nx--) {
-		for (int nz = 1; nz >= -1; nz--) {
-			if ((nx != 0 || nz != 0) && x + nx < GRID_SIZE && x + nx >= 0 && z + nz < GRID_SIZE && z + nz >= 0) {
-				uint np = srcGrid[x + nx][y][z + nz];
-				if (np == P_AIR || isGas(np)) {
-					uint wp = atomicCompSwap(dstGrid[x + nx][y][z + nz], np, p);
-					if (wp == np) {
-						atomicExchange(dstGrid[x][y][z], np);
-						return;
-					}
-				}
-			}
-		}
-	}
-	*/
-}
+} 
+*/
 
-void processMovableSolids(uint x, uint y, uint z) {
-	uint p = srcGrid[x][y][z];
+/*
+void processMovableSolid(Particle p) {
+	uint x = p.pos.x, y = p.pos.y, z = p.pos.z;
+	uint pt = p.type;
 	if (y > 0) {
 		// Try to move down
-		uint np = srcGrid[x][y-1][z];
+		uint np = grid[x][y-1][z];
 		if (np == P_AIR || isLiquid(np) || isGas(np)) {
-			uint wp = atomicCompSwap(dstGrid[x][y-1][z], np, p);
+			uint wp = atomicCompSwap(grid[x][y-1][z], np, pt);
 			if (wp == np) {
-				atomicExchange(dstGrid[x][y][z], np);
+				atomicExchange(grid[x][y][z], np);
 				return;
 			}
 		}
@@ -188,11 +279,11 @@ void processMovableSolids(uint x, uint y, uint z) {
 		for (int nx = -1; nx <= 1; nx++) {
 			for (int nz = -1; nz <= 1; nz++) {
 				if ((nx != 0 || nz != 0) && x + nx < GRID_SIZE && x + nx >= 0 && z + nz < GRID_SIZE && z + nz >= 0) {
-					uint np = srcGrid[x + nx][y-1][z + nz];
+					uint np = grid[x + nx][y-1][z + nz];
 					if (np == P_AIR || isLiquid(np) || isGas(np)) {
-						uint wp = atomicCompSwap(dstGrid[x + nx][y - 1][z + nz], np, p);
+						uint wp = atomicCompSwap(grid[x + nx][y - 1][z + nz], np, pt);
 						if (wp == np) {
-							atomicExchange(dstGrid[x][y][z], np);
+							atomicExchange(grid[x][y][z], np);
 							return;
 						}
 					}
@@ -200,26 +291,50 @@ void processMovableSolids(uint x, uint y, uint z) {
 			}
 		}
 	}
-}
+} */
 
-void processImmovableSolids(uint x, uint y, uint z) {
-
-}
-
-void processGases(uint x, uint y, uint z) {
-	
-}
-
-void main() {
-	uint p = srcGrid[inv.x][inv.y][inv.z];
-	if (isLiquid(p)) {
-		processLiquids(inv.x, inv.y, inv.z);
-	} else if (isMovableSolid(p)) {
-		processMovableSolids(inv.x, inv.y, inv.z);
-	} else if(isImmovableSolid(p)) {
-		processImmovableSolids(inv.x, inv.y, inv.z);
-	} else if (isGas(p)) {
-		processGases(inv.x, inv.y, inv.z);
+/*
+void processMovableSolid(Particle p) {
+	uint x = p.pos.x, y = p.pos.y, z = p.pos.z;
+	uint pt = p.type;
+	uint g_index = grid[x][y][z];
+	if (y > 0) {
+		// Try to move down
+		uint ng_index = grid[x][y-1][z];
+		if (ng_index > 0) {
+			// Lower spot has particle
+			uint np = particles[ng_index - 1].type;
+			if (isLiquid(np) || isGas(np)) {
+				// Try to write new particle to grid
+				uint wg_index = atomicCompSwap(grid[x][y-1][z], ng_index, g_index);
+				if (wg_index == ng_index) {
+					// Set old position to swapped particle
+					atomicExchange(grid[x][y][z], ng_index);
+					// Update current particle position
+					atomicExchange(particles[g_index - 1].pos.x, int(x));
+					atomicExchange(particles[g_index - 1].pos.y, int(y - 1));
+					atomicExchange(particles[g_index - 1].pos.z, int(z));
+					//particles[g_index - 1].pos = ivec4(x, y - 1, z, 0);
+					// Update swapped particle position
+					atomicExchange(particles[ng_index - 1].pos.x, int(x));
+					atomicExchange(particles[ng_index - 1].pos.y, int(y));
+					atomicExchange(particles[ng_index - 1].pos.z, int(z));
+					//particles[ng_index - 1].pos = ivec4(x, y, z, 0);
+					return;
+				}
+			}
+		} else {
+			// Lower spot is empty
+			uint wg_index = atomicCompSwap(grid[x][y-1][z], ng_index, g_index);
+			if (wg_index == ng_index) {
+				atomicExchange(grid[x][y][z], ng_index);
+				atomicExchange(particles[g_index - 1].pos.x, int(x));
+				atomicExchange(particles[g_index - 1].pos.y, int(y - 1));
+				atomicExchange(particles[g_index - 1].pos.z, int(z));
+				//particles[g_index - 1].pos = ivec4(x, y - 1, z, 0);
+				return;
+			}
+		}
 	}
-}
-
+} 
+*/

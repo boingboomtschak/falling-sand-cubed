@@ -4,8 +4,13 @@ const int GRID_SIZE = 64;
 
 in vec3 point;
 
-layout (std430, binding = 0) buffer grid_buffer {
-	uint grid[GRID_SIZE][GRID_SIZE][GRID_SIZE];
+struct Particle {
+	ivec4 pos;
+	uint type, alive; float _padding[2];
+};
+
+layout (std430, binding = 0) buffer particle_buffer {
+	Particle particles[];
 };
 
 uniform vec4 colors[];
