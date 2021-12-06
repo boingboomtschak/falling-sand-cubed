@@ -287,7 +287,7 @@ void WriteSphere(vec3 center, int radius, int pType) {
 	int ymin = center.y - radius; ymin = ymin > 0 ? ymin : 0;
 	int ymax = center.y + radius; ymax = ymax < GRID_SIZE ? ymax : GRID_SIZE - 1;
 	int zmin = center.z - radius; zmin = zmin > 0 ? zmin : 0;
-	int zmax = center.z + radius; zmax = zmax < GRID_SIZE ? ymax : GRID_SIZE - 1;
+	int zmax = center.z + radius; zmax = zmax < GRID_SIZE ? zmax : GRID_SIZE - 1;
 	for (int i = xmin; i < xmax; i++) {
 		for (int j = ymin; j < ymax; j++) {
 			for (int k = zmin; k < zmax; k++) {

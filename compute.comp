@@ -69,7 +69,7 @@ float snoise(vec3 v){
 }
 
 void shuffleMoves(inout uint[4] arr) {
-	for (uint i = 0; i < 4; i++) {
+	for (uint i = 0; i < 16; i++) {
 		uint a = uint(floor(snoise(vec3(rngSeed + inv.x, inv.z, inv.y + i)) * 3.0));
 		uint b = uint(floor(snoise(vec3(rngSeed + inv.z, inv.x, inv.y - i)) * 3.0));
 		uint c = arr[a];
