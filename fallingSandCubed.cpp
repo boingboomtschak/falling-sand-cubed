@@ -32,15 +32,16 @@ const char* render_glsl_version = "#version 130";
 int win_width = 800, win_height = 800;
 Camera camera((float)win_width / win_height, vec3(0, 0, 0), vec3(0, 0, -5));
 GLFWwindow* window;
-int renderer = 1; // 0 = CPU-managed, 1 = Instanced
 vec3 lightPos = vec3(1, 1, 0);
 dCube cube;
 vec3 brushPos = vec3((int)(GRID_SIZE / 2), (int)(GRID_SIZE - 3), (int)(GRID_SIZE / 2));
 time_t start;
+int renderer = 1; // 0 = CPU-managed, 1 = Instanced
 int simulationFpsLimit = 60;
+float ambient = 0.7, diffuse = 0.4, specular = 0.4;
 
 // Colors
-float bgColor[4] = { 0.4f, 0.4f, 0.4f, 1.0f };
+float bgColor[4] = { 0.7f, 0.7f, 0.7f, 1.0f };
 float brushColor[4] = { 1.0f, 0.0f, 0.0f, 1.0f };
 float stoneColor[4] = { 0.5f, 0.5f, 0.5f, 1.0f };
 float waterColor[4] = { 0.1f, 0.1f, 0.7f, 0.5f };
@@ -181,6 +182,9 @@ struct ParticleGrid {
 		VertexAttribPointer(renderProgram, "normal", 3, 0, (void*)(sizeof(cube_points)));
 		SetUniform(renderProgram, "persp", camera.persp);
 		SetUniform(renderProgram, "light_pos", lightPos);
+		SetUniform(renderProgram, "amb", ambient);
+		SetUniform(renderProgram, "dif", diffuse);
+		SetUniform(renderProgram, "spc", specular);
 		for (int i = 0; i < GRID_SIZE; i++) {
 			for (int j = 0; j < GRID_SIZE; j++) {
 				for (int k = 0; k < GRID_SIZE; k++) {
@@ -228,6 +232,9 @@ struct ParticleGrid {
 		SetUniform(gridRenderProgram, "persp", camera.persp);
 		SetUniform(gridRenderProgram, "modelview", camera.modelview);
 		SetUniform(gridRenderProgram, "light_pos", lightPos);
+		SetUniform(gridRenderProgram, "amb", ambient);
+		SetUniform(gridRenderProgram, "dif", diffuse);
+		SetUniform(gridRenderProgram, "spc", specular);
 		glBindBuffer(GL_ARRAY_BUFFER, voxelBuffer);
 		VertexAttribPointer(renderProgram, "point", 3, 0, (void*)0);
 		VertexAttribPointer(renderProgram, "normal", 3, 0, (void*)(sizeof(cube_points)));
@@ -533,13 +540,17 @@ void RenderImGui() {
 			ImGui::RadioButton("144 FPS", &simulationFpsLimit, 144);
 			ImGui::RadioButton("60 FPS", &simulationFpsLimit, 60);
 			ImGui::RadioButton("30 FPS", &simulationFpsLimit, 30);
+			ImGui::Separator;
+			ImGui::Text("Lighting");
+			ImGui::SliderFloat("Ambient", &ambient, 0, 1);
+			ImGui::SliderFloat("Diffuse", &diffuse, 0, 1);
+			ImGui::SliderFloat("Specular", &specular, 0, 1);
 			ImGui::EndMenu();
 		}
 		if (ImGui::MenuItem("Quit", "CTRL + Q", false)) glfwSetWindowShouldClose(window, GLFW_TRUE);
 		ImGui::EndMenu();
 	}
 	if (ImGui::BeginMenu("Brush")) {
-		ImGui::BeginChild("brush menu", ImVec2(150, 40));
 		if (ImGui::BeginMenu("Element")) {
 			if (ImGui::MenuItem("Air", "1", brushElement == AIR)) ChangeBrush(AIR);
 			if (ImGui::MenuItem("Stone", "2", brushElement == STONE)) ChangeBrush(STONE);
@@ -549,10 +560,7 @@ void RenderImGui() {
 			if (ImGui::MenuItem("Salt", "6", brushElement == SALT)) ChangeBrush(SALT);
 			ImGui::EndMenu();
 		}
-		ImGui::InputInt("Radius", &brushRadius, 1, 5);
-		if (brushRadius < 1) brushRadius = 1;
-		if (brushRadius > 10) brushRadius = 10;
-		ImGui::EndChild();
+		ImGui::SliderInt("Radius", &brushRadius, 1, 10);
 		ImGui::EndMenu();
 	}
 	if (ImGui::BeginMenu("Grid")) {
