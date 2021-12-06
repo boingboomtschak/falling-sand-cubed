@@ -152,6 +152,20 @@ void processLiquids(uint x, uint y, uint z) {
 					return;
 				}
 			}
+			if (p == P_WATER) {
+				if (moves[m] == 0 && move.x - 1 > 0) move.x -= 1; 
+				if (moves[m] == 1 && move.x + 1 < GRID_SIZE) move.x += 1;
+				if (moves[m] == 2 && move.z - 1 > 0) move.z -= 1;
+				if (moves[m] == 3 && move.z + 1 < GRID_SIZE) move.z += 1;
+				uint np = srcGrid[move.x][move.y][move.z];
+				if (np == P_AIR || isGas(np)) {
+					uint wp = atomicCompSwap(dstGrid[move.x][move.y][move.z], np, p);
+					if (wp == np) {
+						atomicExchange(dstGrid[x][y][z], np);
+						return;
+					}
+				}
+			}
 		}
 	}
 }
