@@ -37,6 +37,7 @@ vec3 lightPos = vec3(1, 1, 0);
 dCube cube;
 vec3 brushPos = vec3((int)(GRID_SIZE / 2), (int)(GRID_SIZE - 3), (int)(GRID_SIZE / 2));
 time_t start;
+int simulationFpsLimit = 60;
 
 // Colors
 float bgColor[4] = { 0.4f, 0.4f, 0.4f, 1.0f };
@@ -169,7 +170,48 @@ struct ParticleGrid {
 		glCopyBufferSubData(GL_COPY_READ_BUFFER, GL_COPY_WRITE_BUFFER, 0, 0, sizeof(grid));
 		readGrid();
 	}
-	void render() {
+	void cpuManagedRender() {
+		updateParticles();
+		glUseProgram(renderProgram);
+		glEnable(GL_BLEND);
+		glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+		glEnable(GL_DEPTH_TEST);
+		glBindBuffer(GL_ARRAY_BUFFER, voxelBuffer);
+		VertexAttribPointer(renderProgram, "point", 3, 0, (void*)0);
+		VertexAttribPointer(renderProgram, "normal", 3, 0, (void*)(sizeof(cube_points)));
+		SetUniform(renderProgram, "persp", camera.persp);
+		SetUniform(renderProgram, "light_pos", lightPos);
+		for (int i = 0; i < GRID_SIZE; i++) {
+			for (int j = 0; j < GRID_SIZE; j++) {
+				for (int k = 0; k < GRID_SIZE; k++) {
+					if (grid[i][j][k] != AIR) {
+						mat4 scale = Scale((float)(1.0f / GRID_SIZE));
+						mat4 trans = Translate((i - (GRID_SIZE / 2) + 0.5) * (2.0f / GRID_SIZE), (j - (GRID_SIZE / 2) + 0.5) * (2.0f / GRID_SIZE), (k - (GRID_SIZE / 2) + 0.5) * (2.0f / GRID_SIZE));
+						SetUniform(renderProgram, "modelview", camera.modelview * trans * scale);
+						switch (grid[i][j][k]) {
+						case STONE:
+							SetUniform(renderProgram, "color", vec4(stoneColor[0], stoneColor[1], stoneColor[2], stoneColor[3]));
+							break;
+						case WATER:
+							SetUniform(renderProgram, "color", vec4(waterColor[0], waterColor[1], waterColor[2], waterColor[3]));
+							break;
+						case SAND:
+							SetUniform(renderProgram, "color", vec4(sandColor[0], sandColor[1], sandColor[2], sandColor[3]));
+							break;
+						case OIL:
+							SetUniform(renderProgram, "color", vec4(oilColor[0], oilColor[1], oilColor[2], oilColor[3]));
+							break;
+						case SALT:
+							SetUniform(renderProgram, "color", vec4(saltColor[0], saltColor[1], saltColor[2], saltColor[3]));
+							break;
+						}
+						glDrawElements(GL_TRIANGLES, 36, GL_UNSIGNED_INT, cube_triangles);
+					}
+				}
+			}
+		}
+	}
+	void instancedRender() {
 		updateParticles();
 		// Instanced rendering of grid with shader storage
 		glUseProgram(gridRenderProgram);
@@ -211,48 +253,6 @@ void CompileShaders() {
 	if (!gridRenderProgram) {
 		fprintf(stderr, "SHADER: Error linking grid render shader! Exiting...\n");
 		exit(1);
-	}
-}
-
-void RenderGrid() {
-	grid.updateParticles();
-	glUseProgram(renderProgram);
-	glEnable(GL_BLEND);
-	glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
-	glEnable(GL_DEPTH_TEST);
-	glBindBuffer(GL_ARRAY_BUFFER, voxelBuffer);
-	VertexAttribPointer(renderProgram, "point", 3, 0, (void*)0);
-	VertexAttribPointer(renderProgram, "normal", 3, 0, (void*)(sizeof(cube_points)));
-	SetUniform(renderProgram, "persp", camera.persp);
-	SetUniform(renderProgram, "light_pos", lightPos);
-	for (int i = 0; i < GRID_SIZE; i++) {
-		for (int j = 0; j < GRID_SIZE; j++) {
-			for (int k = 0; k < GRID_SIZE; k++) {
-				if (grid.grid[i][j][k] != AIR) {
-					mat4 scale = Scale((float)(1.0f / GRID_SIZE));
-					mat4 trans = Translate((i - (GRID_SIZE / 2) + 0.5) * (2.0f / GRID_SIZE), (j - (GRID_SIZE / 2) + 0.5) * (2.0f / GRID_SIZE), (k - (GRID_SIZE / 2) + 0.5) * (2.0f / GRID_SIZE));
-					SetUniform(renderProgram, "modelview", camera.modelview * trans * scale);
-					switch (grid.grid[i][j][k]) {
-						case STONE:
-							SetUniform(renderProgram, "color", vec4(stoneColor[0], stoneColor[1], stoneColor[2], stoneColor[3]));
-							break;
-						case WATER:
-							SetUniform(renderProgram, "color", vec4(waterColor[0], waterColor[1], waterColor[2], waterColor[3]));
-							break;
-						case SAND:
-							SetUniform(renderProgram, "color", vec4(sandColor[0], sandColor[1], sandColor[2], sandColor[3]));
-							break;
-						case OIL:
-							SetUniform(renderProgram, "color", vec4(oilColor[0], oilColor[1], oilColor[2], oilColor[3]));
-							break;
-						case SALT:
-							SetUniform(renderProgram, "color", vec4(saltColor[0], saltColor[1], saltColor[2], saltColor[3]));
-							break;
-					}
-					glDrawElements(GL_TRIANGLES, 36, GL_UNSIGNED_INT, cube_triangles);
-				}
-			}
-		}
 	}
 }
 
@@ -525,8 +525,14 @@ void RenderImGui() {
 			ImGui::EndMenu();
 		}
 		if (ImGui::BeginMenu("Renderer")) {
+			ImGui::Text("Renderer");
 			ImGui::RadioButton("CPU-managed", &renderer, 0);
 			ImGui::RadioButton("Instanced", &renderer, 1);
+			ImGui::Separator();
+			ImGui::Text("Simulation FPS");
+			ImGui::RadioButton("144 FPS", &simulationFpsLimit, 144);
+			ImGui::RadioButton("60 FPS", &simulationFpsLimit, 60);
+			ImGui::RadioButton("30 FPS", &simulationFpsLimit, 30);
 			ImGui::EndMenu();
 		}
 		if (ImGui::MenuItem("Quit", "CTRL + Q", false)) glfwSetWindowShouldClose(window, GLFW_TRUE);
@@ -586,8 +592,8 @@ void Display() {
 	glClearColor(bgColor[0], bgColor[1], bgColor[2], bgColor[3]);
 	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 	cube.display(camera);
-	if (renderer == 0) RenderGrid();
-	else if (renderer == 1) grid.render();
+	if (renderer == 0) grid.cpuManagedRender();
+	else if (renderer == 1) grid.instancedRender();
 	RenderDropper();
 	RenderImGui();
 	glFlush();
@@ -621,8 +627,15 @@ int main() {
 	glfwSetKeyCallback(window, S_Keyboard);
 	glfwSwapInterval(1);
 	start = clock();
+	double lastFrame = 0, lastSim = 0;
 	while (!glfwWindowShouldClose(window)) {
-		grid.compute();
+		double now = glfwGetTime();
+		double deltaTime = now - lastFrame;
+		if ((now - lastSim) >= (1.0 / simulationFpsLimit)) {
+			grid.compute();
+			lastSim = now;
+		}
+		lastFrame = now;
 		Display();
 		glfwPollEvents();
 		glfwSwapBuffers(window);
