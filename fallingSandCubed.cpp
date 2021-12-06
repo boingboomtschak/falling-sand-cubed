@@ -32,11 +32,11 @@ const char* render_glsl_version = "#version 130";
 int win_width = 800, win_height = 800;
 Camera camera((float)win_width / win_height, vec3(0, 0, 0), vec3(0, 0, -5));
 GLFWwindow* window;
+int renderer = 1; // 0 = CPU-managed, 1 = Instanced
 vec3 lightPos = vec3(1, 1, 0);
 dCube cube;
 vec3 brushPos = vec3((int)(GRID_SIZE / 2), (int)(GRID_SIZE - 3), (int)(GRID_SIZE / 2));
 time_t start;
-int renderer = 1;
 
 // Colors
 float bgColor[4] = { 0.4f, 0.4f, 0.4f, 1.0f };
@@ -92,9 +92,7 @@ struct ParticleGrid {
 	}
 	void writeGrid() {
 		glBindBuffer(GL_SHADER_STORAGE_BUFFER, srcBuffer);
-		GLvoid* buf = glMapBuffer(GL_SHADER_STORAGE_BUFFER, GL_WRITE_ONLY);
-		memcpy(buf, &grid, sizeof(grid));
-		glUnmapBuffer(GL_SHADER_STORAGE_BUFFER);
+		glBufferSubData(GL_SHADER_STORAGE_BUFFER, 0, sizeof(grid), &grid);
 	}
 	void readGrid() {
 		glBindBuffer(GL_SHADER_STORAGE_BUFFER, srcBuffer);
@@ -102,9 +100,7 @@ struct ParticleGrid {
 	}
 	void writeParticles() {
 		glBindBuffer(GL_SHADER_STORAGE_BUFFER, particleBuffer);
-		GLvoid* buf = glMapBuffer(GL_SHADER_STORAGE_BUFFER, GL_WRITE_ONLY);
-		memcpy(buf, &particles, sizeof(Particle) * num_particles);
-		glUnmapBuffer(GL_SHADER_STORAGE_BUFFER);
+		glBufferSubData(GL_SHADER_STORAGE_BUFFER, 0, sizeof(Particle) * num_particles, &particles);
 	}
 	void loadBuffer() {
 		// Create and write srcBuffer
@@ -119,7 +115,7 @@ struct ParticleGrid {
 		// Create particleBuffer
 		glGenBuffers(1, &particleBuffer);
 		glBindBuffer(GL_SHADER_STORAGE_BUFFER, particleBuffer);
-		glBufferData(GL_SHADER_STORAGE_BUFFER, sizeof(particles), NULL, GL_DYNAMIC_COPY);
+		glBufferData(GL_SHADER_STORAGE_BUFFER, sizeof(particles), NULL, GL_DYNAMIC_DRAW);
 	}
 	void unloadBuffer() {
 		glBindBuffer(GL_SHADER_STORAGE_BUFFER, 0);
@@ -140,18 +136,21 @@ struct ParticleGrid {
 			for (int j = 0; j < GRID_SIZE; j++) {
 				for (int k = 0; k < GRID_SIZE; k++) {
 					if (grid[i][j][k] != AIR) {
-						particles[num_particles].x = i;
-						particles[num_particles].y = j;
-						particles[num_particles].z = k;
-						particles[num_particles].t = grid[i][j][k];
+						if (renderer == 1) {
+							particles[num_particles].x = i;
+							particles[num_particles].y = j;
+							particles[num_particles].z = k;
+							particles[num_particles].t = grid[i][j][k];
+						}
 						num_particles++;
 					}
 				}
 			}
 		}
-		writeParticles();
+		if (renderer == 1) writeParticles();
 	}
 	void compute() {
+		writeGrid();
 		// Copy src to dst (dst will be modified by compute program)
 		glBindBuffer(GL_COPY_READ_BUFFER, srcBuffer);
 		glBindBuffer(GL_COPY_WRITE_BUFFER, dstBuffer);
@@ -168,6 +167,7 @@ struct ParticleGrid {
 		glBindBuffer(GL_COPY_READ_BUFFER, dstBuffer);
 		glBindBuffer(GL_COPY_WRITE_BUFFER, srcBuffer);
 		glCopyBufferSubData(GL_COPY_READ_BUFFER, GL_COPY_WRITE_BUFFER, 0, 0, sizeof(grid));
+		readGrid();
 	}
 	void render() {
 		updateParticles();
@@ -215,7 +215,7 @@ void CompileShaders() {
 }
 
 void RenderGrid() {
-	grid.readGrid();
+	grid.updateParticles();
 	glUseProgram(renderProgram);
 	glEnable(GL_BLEND);
 	glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
@@ -409,11 +409,6 @@ void S_Keyboard(GLFWwindow* window, int key, int scancode, int action, int mods)
 		case GLFW_KEY_6:
 			ChangeBrush(SALT);
 			break;
-		case GLFW_KEY_P:
-			for (size_t i = 0; i < grid.num_particles; i++) {
-				Particle p = grid.particles[i];
-				printf("P %i: (%i, %i, %i), %i\n", i, p.x, p.y, p.z, p.t);
-			}
 	}
 }
 
@@ -592,9 +587,7 @@ void Display() {
 	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 	cube.display(camera);
 	if (renderer == 0) RenderGrid();
-	if (renderer == 1) grid.render();
-	//RenderGrid();
-	//grid.render();
+	else if (renderer == 1) grid.render();
 	RenderDropper();
 	RenderImGui();
 	glFlush();
@@ -627,14 +620,12 @@ int main() {
 	glfwSetMouseButtonCallback(window, S_MouseButton);
 	glfwSetKeyCallback(window, S_Keyboard);
 	glfwSwapInterval(1);
-	int frame = 0;
 	start = clock();
 	while (!glfwWindowShouldClose(window)) {
 		grid.compute();
 		Display();
 		glfwPollEvents();
 		glfwSwapBuffers(window);
-		frame++;
 	}
 	ImGui_ImplOpenGL3_Shutdown();
 	ImGui_ImplGlfw_Shutdown();
