@@ -78,8 +78,10 @@ enum ParticleType {
 };
 
 int brushElement = SAND;
-string brushElementString = "SAND";
 int brushRadius = 3;
+int brushShape = 0; // 0 = Circle, 1 = Cube
+string brushElementString = "SAND";
+string brushShapeString = "SPHERE";
 
 struct Particle {
 	GLint x, y, z, t; // x, y, z, type
@@ -162,6 +164,40 @@ struct ParticleGrid {
 			}
 		}
 		if (renderer == 1) writeParticles();
+	}
+	void WriteSphere(vec3 center, int radius, int pType) {
+		int xmin = center.x - radius; xmin = xmin > 0 ? xmin : 0;
+		int xmax = center.x + radius; xmax = xmax < GRID_SIZE ? xmax : GRID_SIZE - 1;
+		int ymin = center.y - radius; ymin = ymin > 0 ? ymin : 0;
+		int ymax = center.y + radius; ymax = ymax < GRID_SIZE ? ymax : GRID_SIZE - 1;
+		int zmin = center.z - radius; zmin = zmin > 0 ? zmin : 0;
+		int zmax = center.z + radius; zmax = zmax < GRID_SIZE ? zmax : GRID_SIZE - 1;
+		for (int i = xmin; i < xmax; i++) {
+			for (int j = ymin; j < ymax; j++) {
+				for (int k = zmin; k < zmax; k++) {
+					vec3 p = vec3(i, j, k);
+					float p_dist = dist(center, p);
+					if (p_dist <= radius) {
+						grid[i][j][k] = pType;
+					}
+				}
+			}
+		}
+	}
+	void WriteCube(vec3 center, int radius, int pType) {
+		int xmin = center.x - radius; xmin = xmin > 0 ? xmin : 0;
+		int xmax = center.x + radius; xmax = xmax < GRID_SIZE ? xmax : GRID_SIZE - 1;
+		int ymin = center.y - radius; ymin = ymin > 0 ? ymin : 0;
+		int ymax = center.y + radius; ymax = ymax < GRID_SIZE ? ymax : GRID_SIZE - 1;
+		int zmin = center.z - radius; zmin = zmin > 0 ? zmin : 0;
+		int zmax = center.z + radius; zmax = zmax < GRID_SIZE ? zmax : GRID_SIZE - 1;
+		for (int i = xmin; i < xmax; i++) {
+			for (int j = ymin; j < ymax; j++) {
+				for (int k = zmin; k < zmax; k++) {
+					grid[i][j][k] = pType;
+				}
+			}
+		}
 	}
 	void compute() {
 		writeGrid();
@@ -314,31 +350,13 @@ void RenderDropperStencil() {
 	glEnable(GL_DEPTH_TEST);
 }
 
-void WriteSphere(vec3 center, int radius, int pType) {
-	grid.readGrid();
-	int xmin = center.x - radius; xmin = xmin > 0 ? xmin : 0;
-	int xmax = center.x + radius; xmax = xmax < GRID_SIZE ? xmax : GRID_SIZE - 1;
-	int ymin = center.y - radius; ymin = ymin > 0 ? ymin : 0;
-	int ymax = center.y + radius; ymax = ymax < GRID_SIZE ? ymax : GRID_SIZE - 1;
-	int zmin = center.z - radius; zmin = zmin > 0 ? zmin : 0;
-	int zmax = center.z + radius; zmax = zmax < GRID_SIZE ? zmax : GRID_SIZE - 1;
-	for (int i = xmin; i < xmax; i++) {
-		for (int j = ymin; j < ymax; j++) {
-			for (int k = zmin; k < zmax; k++) {
-				vec3 p = vec3(i, j, k);
-				float p_dist = dist(center, p);
-				if (p_dist <= radius) {
-					grid.grid[i][j][k] = pType;
-				}
-			}
-		}
-	}
-	grid.writeGrid();
-}
 
-void ChangeBrush(int pType) {
-	brushElement = pType;
-	switch (pType) {
+
+
+
+void ChangeBrushElement (int type) {
+	brushElement = type;
+	switch (type) {
 	case AIR:
 		brushElementString = "AIR";
 		break;
@@ -359,6 +377,18 @@ void ChangeBrush(int pType) {
 		break;
 	case STEAM:
 		brushElementString = "STEAM";
+		break;
+	}
+}
+
+void ChangeBrushShape(int shape) {
+	brushShape = shape;
+	switch (shape) {
+	case 0:
+		brushShapeString = "SPHERE";
+		break;
+	case 1:
+		brushShapeString = "CUBE";
 		break;
 	}
 }
@@ -391,7 +421,8 @@ void S_Keyboard(GLFWwindow* window, int key, int scancode, int action, int mods)
 			if (glfwGetKey(window, GLFW_KEY_LEFT_ALT) == GLFW_PRESS) grid.clear();
 			break;
 		case GLFW_KEY_SPACE:
-			WriteSphere(brushPos, brushRadius, brushElement);
+			if (brushShape == 0) grid.WriteSphere(brushPos, brushRadius, brushElement);
+			else if (brushShape == 1) grid.WriteCube(brushPos, brushRadius, brushElement);
 			break;
 		case GLFW_KEY_H:
 			if (glfwGetKey(window, GLFW_KEY_LEFT_CONTROL) == GLFW_PRESS) showHelp = true;
@@ -440,25 +471,31 @@ void S_Keyboard(GLFWwindow* window, int key, int scancode, int action, int mods)
 				showOverlay = true; return;
 			}
 		case GLFW_KEY_1:
-			ChangeBrush(AIR);
+			if (glfwGetKey(window, GLFW_KEY_LEFT_SHIFT) == GLFW_PRESS) {
+				ChangeBrushShape(0); return;
+			}
+			ChangeBrushElement(AIR);
 			break;
 		case GLFW_KEY_2:
-			ChangeBrush(STONE);
+			if (glfwGetKey(window, GLFW_KEY_LEFT_SHIFT) == GLFW_PRESS) {
+				ChangeBrushShape(1); return;
+			}
+			ChangeBrushElement(STONE);
 			break;
 		case GLFW_KEY_3:
-			ChangeBrush(WATER);
+			ChangeBrushElement(WATER);
 			break;
 		case GLFW_KEY_4:
-			ChangeBrush(SAND);
+			ChangeBrushElement(SAND);
 			break;
 		case GLFW_KEY_5:
-			ChangeBrush(OIL);
+			ChangeBrushElement(OIL);
 			break;
 		case GLFW_KEY_6:
-			ChangeBrush(SALT);
+			ChangeBrushElement(SALT);
 			break;
 		case GLFW_KEY_7:
-			ChangeBrush(STEAM);
+			ChangeBrushElement(STEAM);
 			break;
 	}
 }
@@ -535,6 +572,8 @@ void ShowOverlayWindow(bool* p_open) {
 		ImGui::Text("Particles: %i", grid.num_particles);
 		ImGui::Text("Brush: (%i,%i,%i)", (int)brushPos.x, (int)brushPos.y, (int)brushPos.z);
 		ImGui::Text("Element: %s", brushElementString.c_str());
+		ImGui::Text("Radius: %i", brushRadius);
+		ImGui::Text("Shape: %s", brushShapeString.c_str());
 		if (showGridStats) {
 			ImGui::Separator();
 			ImGui::Text("Stone: %i", grid.stone);
@@ -637,16 +676,21 @@ void RenderImGui() {
 	}
 	if (ImGui::BeginMenu("Brush")) {
 		if (ImGui::BeginMenu("Element")) {
-			if (ImGui::MenuItem("Air", "1", brushElement == AIR)) ChangeBrush(AIR);
-			if (ImGui::MenuItem("Stone", "2", brushElement == STONE)) ChangeBrush(STONE);
-			if (ImGui::MenuItem("Water", "3", brushElement == WATER)) ChangeBrush(WATER);
-			if (ImGui::MenuItem("Sand", "4", brushElement == SAND)) ChangeBrush(SAND);
-			if (ImGui::MenuItem("Oil", "5", brushElement == OIL)) ChangeBrush(OIL);
-			if (ImGui::MenuItem("Salt", "6", brushElement == SALT)) ChangeBrush(SALT);
-			if (ImGui::MenuItem("Steam", "7", brushElement == STEAM)) ChangeBrush(STEAM);
+			if (ImGui::MenuItem("Air", "1", brushElement == AIR)) ChangeBrushElement(AIR);
+			if (ImGui::MenuItem("Stone", "2", brushElement == STONE)) ChangeBrushElement(STONE);
+			if (ImGui::MenuItem("Water", "3", brushElement == WATER)) ChangeBrushElement(WATER);
+			if (ImGui::MenuItem("Sand", "4", brushElement == SAND)) ChangeBrushElement(SAND);
+			if (ImGui::MenuItem("Oil", "5", brushElement == OIL)) ChangeBrushElement(OIL);
+			if (ImGui::MenuItem("Salt", "6", brushElement == SALT)) ChangeBrushElement(SALT);
+			if (ImGui::MenuItem("Steam", "7", brushElement == STEAM)) ChangeBrushElement(STEAM);
 			ImGui::EndMenu();
 		}
 		ImGui::SliderInt("Radius", &brushRadius, 1, 20);
+		if (ImGui::BeginMenu("Shape")) {
+			if (ImGui::MenuItem("Sphere", "SHIFT + 1", brushShape == 0)) ChangeBrushShape(0);
+			if (ImGui::MenuItem("Cube", "SHIFT + 2", brushShape == 1)) ChangeBrushShape(1);
+			ImGui::EndMenu();
+		}
 		ImGui::MenuItem("Toggle Highlight", NULL, &drawBrushHighlight);
 		ImGui::EndMenu();
 	}
