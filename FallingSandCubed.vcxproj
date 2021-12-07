@@ -47,7 +47,7 @@
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'" Label="Configuration">
     <ConfigurationType>Application</ConfigurationType>
-    <UseDebugLibraries>false</UseDebugLibraries>
+    <UseDebugLibraries>true</UseDebugLibraries>
     <PlatformToolset>v143</PlatformToolset>
     <WholeProgramOptimization>true</WholeProgramOptimization>
     <CharacterSet>Unicode</CharacterSet>
@@ -78,11 +78,13 @@
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
     <LinkIncremental>true</LinkIncremental>
-    <IncludePath>$(SolutionDir)\include;$(SolutionDir)\jb-include;$(IncludePath)</IncludePath>
-    <LibraryPath>$(SolutionDir)\jb-lib;$(SolutionDir)\lib;$(LibraryPath)</LibraryPath>
+    <IncludePath>$(SolutionDir)imgui;$(SolutionDir)include;$(SolutionDir)jb-include;$(IncludePath)</IncludePath>
+    <LibraryPath>$(SolutionDir)imgui;$(SolutionDir)jb-lib;$(SolutionDir)lib;$(LibraryPath)</LibraryPath>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
     <LinkIncremental>false</LinkIncremental>
+    <IncludePath>$(SolutionDir)imgui;$(SolutionDir)include;$(SolutionDir)jb-include</IncludePath>
+    <LibraryPath>$(SolutionDir)imgui;$(SolutionDir)jb-lib;$(SolutionDir)lib;$(LibraryPath)</LibraryPath>
   </PropertyGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
     <ClCompile>
@@ -118,7 +120,7 @@
       <SDLCheck>true</SDLCheck>
       <PreprocessorDefinitions>_CRT_SECURE_NO_WARNINGS;CRT_SECURE_NO_DEPRECATE_DEBUG;_CONSOLE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <ConformanceMode>true</ConformanceMode>
-      <AdditionalIncludeDirectories>A:\Program Files\Git\falling-sand-cubed\imgui;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
     </ClCompile>
     <Link>
       <SubSystem>Console</SubSystem>
@@ -133,14 +135,17 @@
       <FunctionLevelLinking>true</FunctionLevelLinking>
       <IntrinsicFunctions>true</IntrinsicFunctions>
       <SDLCheck>true</SDLCheck>
-      <PreprocessorDefinitions>NDEBUG;_CONSOLE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <PreprocessorDefinitions>NDEBUG;_CONSOLE;_CRT_SECURE_NO_WARNINGS;CRT_SECURE_NO_DEPRECATE_DEBUG;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <ConformanceMode>true</ConformanceMode>
+      <DebugInformationFormat>None</DebugInformationFormat>
     </ClCompile>
     <Link>
       <SubSystem>Console</SubSystem>
       <EnableCOMDATFolding>true</EnableCOMDATFolding>
       <OptimizeReferences>true</OptimizeReferences>
       <GenerateDebugInformation>true</GenerateDebugInformation>
+      <AdditionalDependencies>glfw3.lib;opengl32.lib;glu32.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <IgnoreSpecificDefaultLibraries>MSVCRT</IgnoreSpecificDefaultLibraries>
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
@@ -164,15 +169,18 @@
     <ClInclude Include="include\CameraControls.h" />
     <ClInclude Include="include\dCube.h" />
     <ClInclude Include="include\GeomUtils.h" />
+    <ClInclude Include="resource.h" />
   </ItemGroup>
   <ItemGroup>
-    <None Include="compute.comp" />
-    <None Include="gridRender.frag" />
-    <None Include="gridRender.vert" />
-    <None Include="render.frag" />
-    <None Include="render.vert" />
-    <None Include="stencil.frag" />
-    <None Include="stencil.vert" />
+    <None Include="shaders\compute.comp">
+      <FileType>Document</FileType>
+    </None>
+    <None Include="shaders\gridRender.frag" />
+    <None Include="shaders\gridRender.vert" />
+    <None Include="shaders\render.frag" />
+    <None Include="shaders\render.vert" />
+    <None Include="shaders\stencil.frag" />
+    <None Include="shaders\stencil.vert" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">

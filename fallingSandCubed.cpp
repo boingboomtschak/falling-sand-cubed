@@ -54,6 +54,7 @@ float steamColor[4] = { 0.714f, 0.976f, 1.0f, 0.5f };
 // Window show toggles
 static bool showAbout = false;
 static bool showHelp = false;
+static bool showElements = false;
 static bool showOverlay = false;
 static bool showGridStats = false;
 static bool showDemo = false; // debug
@@ -257,22 +258,22 @@ struct ParticleGrid {
 ParticleGrid grid;
 
 void CompileShaders() {
-	computeProgram = LinkProgramViaFile("compute.comp");
+	computeProgram = LinkProgramViaFile("shaders/compute.comp");
 	if (!computeProgram) {
 		fprintf(stderr, "SHADER: Error linking compute shader! Exiting...\n");
 		exit(1);
 	}
-	renderProgram = LinkProgramViaFile("render.vert", "render.frag");
+	renderProgram = LinkProgramViaFile("shaders/render.vert", "shaders/render.frag");
 	if (!renderProgram) {
 		fprintf(stderr, "SHADER: Error linking render shader! Exiting...\n");
 		exit(1);
 	}
-	gridRenderProgram = LinkProgramViaFile("gridRender.vert", "gridRender.frag");
+	gridRenderProgram = LinkProgramViaFile("shaders/gridRender.vert", "shaders/gridRender.frag");
 	if (!gridRenderProgram) {
 		fprintf(stderr, "SHADER: Error linking grid render shader! Exiting...\n");
 		exit(1);
 	}
-	stencilProgram = LinkProgramViaFile("stencil.vert", "stencil.frag");
+	stencilProgram = LinkProgramViaFile("shaders/stencil.vert", "shaders/stencil.frag");
 	if (!stencilProgram) {
 		fprintf(stderr, "SHADER: Error linking stencil shader! Exiting...\n");
 		exit(1);
@@ -409,8 +410,7 @@ void S_Keyboard(GLFWwindow* window, int key, int scancode, int action, int mods)
 			break;
 		case GLFW_KEY_A:
 			if (glfwGetKey(window, GLFW_KEY_LEFT_CONTROL) == GLFW_PRESS) {
-				showAbout = true;
-				return;
+				showAbout = true; return;
 			}
 			if (brushPos.z > 0)
 				brushPos.z -= 1;
@@ -426,6 +426,9 @@ void S_Keyboard(GLFWwindow* window, int key, int scancode, int action, int mods)
 				brushPos.y += 1;
 			break;
 		case GLFW_KEY_E:
+			if (glfwGetKey(window, GLFW_KEY_LEFT_CONTROL) == GLFW_PRESS) {
+				showElements = true; return;
+			}
 			if (brushPos.y > 0)
 				brushPos.y -= 1;
 			break;
@@ -482,7 +485,7 @@ void UnloadBuffers() {
 }
 
 void ShowAboutWindow(bool* p_open) {
-	int about_width = 400, about_height = 200;
+	int about_width = 400, about_height = 240;
 	ImGuiWindowFlags window_flags = ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoCollapse;
 	ImGui::SetNextWindowPos(ImVec2((win_width / 2) - (about_width / 2), (win_height / 2) - (about_height / 2)), ImGuiCond_Once);
 	ImGui::SetNextWindowSize(ImVec2(about_width, about_height), ImGuiCond_Once);
@@ -547,6 +550,36 @@ void ShowOverlayWindow(bool* p_open) {
 	ImGui::End();
 }
 
+void ShowElementsWindow(bool* p_open) {
+	int elements_width = 400, elements_height = 140;
+	ImGuiWindowFlags window_flags = ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoCollapse;
+	ImGui::SetNextWindowSize(ImVec2(elements_width, elements_height), ImGuiCond_Once);
+	ImGui::SetNextWindowPos(ImVec2((win_width / 2) - (elements_width / 2), (win_height / 2) - (elements_height / 2)), ImGuiCond_Once);
+	if (ImGui::Begin("Elements", p_open, window_flags)) {
+		static int selected = AIR;
+		ImGui::BeginChild("left pane", ImVec2(80, 0), true);
+		if (ImGui::Selectable("Air", selected == AIR)) selected = AIR;
+		if (ImGui::Selectable("Stone", selected == STONE)) selected = STONE;
+		if (ImGui::Selectable("Water", selected == WATER)) selected = WATER;
+		if (ImGui::Selectable("Sand", selected == SAND)) selected = SAND;
+		if (ImGui::Selectable("Oil", selected == OIL)) selected = OIL;
+		if (ImGui::Selectable("Salt", selected == SALT)) selected = SALT;
+		if (ImGui::Selectable("Steam", selected == STEAM)) selected = STEAM;
+		ImGui::EndChild();
+		ImGui::SameLine();
+		ImGui::BeginChild("item view", ImVec2(0, 0), true);
+		if (selected == AIR) ImGui::TextWrapped(FSGui::ElementsAirText);
+		if (selected == STONE) ImGui::TextWrapped(FSGui::ElementsStoneText);
+		if (selected == WATER) ImGui::TextWrapped(FSGui::ElementsWaterText);
+		if (selected == SAND) ImGui::TextWrapped(FSGui::ElementsSandText);
+		if (selected == OIL) ImGui::TextWrapped(FSGui::ElementsOilText);
+		if (selected == SALT) ImGui::TextWrapped(FSGui::ElementsSaltText);
+		if (selected == STEAM) ImGui::TextWrapped(FSGui::ElementsSteamText);
+		ImGui::EndChild();
+	}
+	ImGui::End();
+}
+
 void RenderImGui() {
 	// Tell ImGui we're rendering a new frame
 	ImGui_ImplOpenGL3_NewFrame();
@@ -558,6 +591,7 @@ void RenderImGui() {
 	if (ImGui::BeginMenu("FallingSandCubed")) {
 		if (ImGui::MenuItem("About", "CTRL + A", false)) showAbout = !showAbout;
 		if (ImGui::MenuItem("Help", "CTRL + H", false)) showHelp = !showHelp;
+		if (ImGui::MenuItem("Elements", "CTRL + E", false)) showElements = !showElements;
 		if (ImGui::BeginMenu("Overlay")) {
 			if (ImGui::MenuItem("Toggle", "CTRL + O", showOverlay)) showOverlay = !showOverlay;
 			if (ImGui::MenuItem("Grid Stats", "CTRL + SHIFT + O", showGridStats && showOverlay, showOverlay)) showGridStats = !showGridStats;
@@ -642,6 +676,7 @@ void RenderImGui() {
 	// Show windows
 	if (showAbout) ShowAboutWindow(&showAbout);
 	if (showHelp) ShowHelpWindow(&showHelp);
+	if (showElements) ShowElementsWindow(&showElements);
 	if (showOverlay) ShowOverlayWindow(&showOverlay);
 	if (showDemo) ImGui::ShowDemoWindow(); // debug
 	if (showMetrics) ImGui::ShowMetricsWindow(); // debug
