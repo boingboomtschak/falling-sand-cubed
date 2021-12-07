@@ -1,6 +1,5 @@
 #version 430 core
 
-
 in vec3 point;
 in vec3 normal;
 

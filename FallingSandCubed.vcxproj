@@ -169,7 +169,6 @@
     <ClInclude Include="include\CameraControls.h" />
     <ClInclude Include="include\dCube.h" />
     <ClInclude Include="include\GeomUtils.h" />
-    <ClInclude Include="resource.h" />
   </ItemGroup>
   <ItemGroup>
     <None Include="shaders\compute.comp">

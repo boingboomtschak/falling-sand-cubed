@@ -316,7 +316,7 @@ void CompileShaders() {
 	}
 }
 
-void RenderDropper() {
+void RenderBrush() {
 	glStencilFunc(GL_ALWAYS, 1, 0xFF);
 	glStencilMask(0xFF);
 	glUseProgram(renderProgram);
@@ -332,7 +332,7 @@ void RenderDropper() {
 	glDrawElements(GL_TRIANGLES, 36, GL_UNSIGNED_INT, cube_triangles);
 }
 
-void RenderDropperStencil() {
+void RenderBrushStencil() {
 	glStencilFunc(GL_NOTEQUAL, 1, 0xFF);
 	glStencilMask(0x00);
 	glDisable(GL_DEPTH_TEST);
@@ -349,10 +349,6 @@ void RenderDropperStencil() {
 	glStencilMask(0xFF);
 	glEnable(GL_DEPTH_TEST);
 }
-
-
-
-
 
 void ChangeBrushElement (int type) {
 	brushElement = type;
@@ -736,8 +732,8 @@ void Display() {
 	cube.display(camera);
 	if (renderer == 0) grid.cpuManagedRender();
 	else if (renderer == 1) grid.instancedRender();
-	RenderDropper();
-	if (drawBrushHighlight) RenderDropperStencil();
+	RenderBrush();
+	if (drawBrushHighlight) RenderBrushStencil();
 	RenderImGui();
 	glFlush();
 }
