@@ -171,6 +171,8 @@
     <None Include="gridRender.vert" />
     <None Include="render.frag" />
     <None Include="render.vert" />
+    <None Include="stencil.frag" />
+    <None Include="stencil.vert" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">

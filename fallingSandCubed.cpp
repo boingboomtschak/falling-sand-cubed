@@ -22,7 +22,7 @@
 using std::vector;
 using std::string;
 
-GLuint computeProgram = 0, renderProgram = 0, gridRenderProgram = 0;
+GLuint computeProgram = 0, renderProgram = 0, gridRenderProgram = 0, stencilProgram = 0;
 GLuint srcBuffer = 0, dstBuffer = 0, voxelBuffer = 0, particleBuffer = 0;
 
 const int GRID_SIZE = 64;
@@ -43,6 +43,7 @@ float ambient = 0.7, diffuse = 0.4, specular = 0.4;
 // Colors
 float bgColor[4] = { 0.7f, 0.7f, 0.7f, 1.0f };
 float brushColor[4] = { 1.0f, 0.0f, 0.0f, 1.0f };
+float stencilColor[4] = { 1.0f, 1.0f, 1.0f, 1.0f };
 float stoneColor[4] = { 0.5f, 0.5f, 0.5f, 1.0f };
 float waterColor[4] = { 0.1f, 0.1f, 0.7f, 0.5f };
 float sandColor[4] = { 0.906f, 0.702f, 0.498f, 1.0f };
@@ -59,6 +60,7 @@ static bool showDemo = false; // debug
 static bool showMetrics = false; // debug
 int overlayCorner = 1; // Defaults to top-right
 static bool themeClassic = true, themeLight = false, themeDark = false;
+static bool drawBrushHighlight = true;
 
 float cube_points[][3] = { {-1, -1, 1}, {1, -1, 1}, {1, 1, 1}, {-1, 1, 1}, {-1, -1, -1}, {1, -1, -1}, {1, 1, -1}, {-1, 1, -1}, {-1, -1, 1}, {-1, -1, -1}, {-1, 1, -1}, {-1, 1, 1}, {1, -1, 1}, {1, -1, -1}, {1, 1, -1}, {1, 1, 1}, {-1 , 1, 1}, {1, 1, 1}, {1, 1, -1}, {-1, 1, -1}, {-1, -1, 1}, {1, -1, 1}, {1, -1, -1}, {-1, -1, -1} };
 float cube_normals[][3] = { {0, 0, 1}, {0, 0, 1}, {0, 0, 1}, {0, 0, 1}, {0, 0, -1}, {0, 0, -1}, {0, 0, -1}, {0, 0, -1}, {-1, 0, 0}, {-1, 0, 0}, {-1, 0, 0}, {-1, 0, 0}, {1, 0, 0}, {1, 0, 0}, {1, 0, 0}, {1, 0, 0}, {0, 1, 0}, {0, 1, 0}, {0, 1, 0}, {0, 1, 0}, {0, -1, 0}, {0, -1, 0}, {0, -1, 0}, {0, -1, 0} };
@@ -183,9 +185,7 @@ struct ParticleGrid {
 	void cpuManagedRender() {
 		updateParticles();
 		glUseProgram(renderProgram);
-		glEnable(GL_BLEND);
-		glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
-		glEnable(GL_DEPTH_TEST);
+		glStencilMask(0x00);
 		glBindBuffer(GL_ARRAY_BUFFER, voxelBuffer);
 		VertexAttribPointer(renderProgram, "point", 3, 0, (void*)0);
 		VertexAttribPointer(renderProgram, "normal", 3, 0, (void*)(sizeof(cube_points)));
@@ -231,9 +231,7 @@ struct ParticleGrid {
 		updateParticles();
 		// Instanced rendering of grid with shader storage
 		glUseProgram(gridRenderProgram);
-		glEnable(GL_BLEND);
-		glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
-		glEnable(GL_DEPTH_TEST);
+		glStencilMask(0x00);
 		glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 0, particleBuffer);
 		SetUniform(gridRenderProgram, "grid_size", GRID_SIZE);
 		SetUniform(gridRenderProgram, "stoneColor", vec4(stoneColor[0], stoneColor[1], stoneColor[2], stoneColor[3]));
@@ -274,13 +272,17 @@ void CompileShaders() {
 		fprintf(stderr, "SHADER: Error linking grid render shader! Exiting...\n");
 		exit(1);
 	}
+	stencilProgram = LinkProgramViaFile("stencil.vert", "stencil.frag");
+	if (!stencilProgram) {
+		fprintf(stderr, "SHADER: Error linking stencil shader! Exiting...\n");
+		exit(1);
+	}
 }
 
 void RenderDropper() {
+	glStencilFunc(GL_ALWAYS, 1, 0xFF);
+	glStencilMask(0xFF);
 	glUseProgram(renderProgram);
-	glEnable(GL_BLEND);
-	glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
-	glEnable(GL_DEPTH_TEST);
 	glBindBuffer(GL_ARRAY_BUFFER, voxelBuffer);
 	VertexAttribPointer(renderProgram, "point", 3, 0, (void*)0);
 	VertexAttribPointer(renderProgram, "normal", 3, 0, (void*)(sizeof(cube_points)));
@@ -291,6 +293,24 @@ void RenderDropper() {
 	SetUniform(renderProgram, "modelview", camera.modelview * trans * scale);
 	SetUniform(renderProgram, "color", vec4(brushColor[0], brushColor[1], brushColor[2], brushColor[3]));
 	glDrawElements(GL_TRIANGLES, 36, GL_UNSIGNED_INT, cube_triangles);
+}
+
+void RenderDropperStencil() {
+	glStencilFunc(GL_NOTEQUAL, 1, 0xFF);
+	glStencilMask(0x00);
+	glDisable(GL_DEPTH_TEST);
+	glUseProgram(stencilProgram);
+	glBindBuffer(GL_ARRAY_BUFFER, voxelBuffer);
+	VertexAttribPointer(stencilProgram, "point", 3, 0, (void*)0);
+	SetUniform(stencilProgram, "persp", camera.persp);
+	SetUniform(stencilProgram, "stencilColor", vec4(stencilColor[0], stencilColor[1], stencilColor[2], stencilColor[3]));
+	mat4 scale = Scale((float)(1.0f / GRID_SIZE) * 1.2);
+	mat4 trans = Translate((brushPos.x - (GRID_SIZE / 2) + 0.5) * (2.0f / GRID_SIZE), (brushPos.y - (GRID_SIZE / 2) + 0.5) * (2.0f / GRID_SIZE), (brushPos.z - (GRID_SIZE / 2) + 0.5) * (2.0f / GRID_SIZE));
+	SetUniform(stencilProgram, "modelview", camera.modelview * trans * scale);
+	glDrawElements(GL_TRIANGLES, 36, GL_UNSIGNED_INT, cube_triangles);
+	glStencilFunc(GL_ALWAYS, 1, 0xFF);
+	glStencilMask(0xFF);
+	glEnable(GL_DEPTH_TEST);
 }
 
 void WriteSphere(vec3 center, int radius, int pType) {
@@ -592,7 +612,8 @@ void RenderImGui() {
 			if (ImGui::MenuItem("Steam", "7", brushElement == STEAM)) ChangeBrush(STEAM);
 			ImGui::EndMenu();
 		}
-		ImGui::SliderInt("Radius", &brushRadius, 1, 10);
+		ImGui::SliderInt("Radius", &brushRadius, 1, 20);
+		ImGui::MenuItem("Toggle Highlight", NULL, &drawBrushHighlight);
 		ImGui::EndMenu();
 	}
 	if (ImGui::BeginMenu("Grid")) {
@@ -601,7 +622,8 @@ void RenderImGui() {
 	}
 	if (ImGui::BeginMenu("Colors")) {
 		ImGui::ColorEdit4("BG Color", bgColor);
-		ImGui::ColorEdit4("Dropper Color", brushColor);
+		ImGui::ColorEdit4("Brush Color", brushColor);
+		ImGui::ColorEdit4("Brush Stencil Color", stencilColor);
 		ImGui::ColorEdit4("Stone Color", stoneColor);
 		ImGui::ColorEdit4("Water Color", waterColor);
 		ImGui::ColorEdit4("Sand Color", sandColor);
@@ -631,11 +653,12 @@ void RenderImGui() {
 
 void Display() {
 	glClearColor(bgColor[0], bgColor[1], bgColor[2], bgColor[3]);
-	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT | GL_STENCIL_BUFFER_BIT);
 	cube.display(camera);
 	if (renderer == 0) grid.cpuManagedRender();
 	else if (renderer == 1) grid.instancedRender();
 	RenderDropper();
+	if (drawBrushHighlight) RenderDropperStencil();
 	RenderImGui();
 	glFlush();
 }
@@ -669,6 +692,11 @@ int main() {
 	glfwSwapInterval(1);
 	start = clock();
 	double lastFrame = 0, lastSim = 0;
+	glEnable(GL_STENCIL_TEST);
+	glStencilOp(GL_KEEP, GL_KEEP, GL_REPLACE);
+	glEnable(GL_DEPTH_TEST);
+	glEnable(GL_BLEND);
+	glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
 	while (!glfwWindowShouldClose(window)) {
 		double now = glfwGetTime();
 		double deltaTime = now - lastFrame;
