@@ -17,6 +17,7 @@ const int P_WATER = 2;
 const int P_SAND = 3;
 const int P_OIL = 4;
 const int P_SALT = 5;
+const int P_STEAM = 6;
 
 uniform int rngSeed;
 
@@ -78,35 +79,45 @@ void shuffleMoves(inout uint[4] arr) {
 	}
 }
 
-bool isLiquid(uint p) {
-	switch (p) {
+bool isLiquid(uint pt) {
+	switch (pt) {
 		case P_WATER:
 			return true;
+			break;
 		case P_OIL:
 			return true;
+			break;
 	}
 	return false;
 }
 
-bool isMovableSolid(uint p) {
-	switch(p) {
+bool isMovableSolid(uint pt) {
+	switch(pt) {
 		case P_SAND:
 			return true;
+			break;
 		case P_SALT:
 			return true;
+			break;
 	}
 	return false;
 }
 
-bool isImmovableSolid(uint p) {
-	switch(p) {
+bool isImmovableSolid(uint pt) {
+	switch(pt) {
 		case P_STONE:
 			return true;
+			break;
 	}
 	return false;
 }
 
-bool isGas(uint p) {
+bool isGas(uint pt) {
+	switch(pt) {
+		case P_STEAM:
+			return true;
+			break;
+	}
 	return false;
 }
 
@@ -114,9 +125,9 @@ void processLiquids(uint x, uint y, uint z) {
 	uint p = srcGrid[x][y][z];
 	// Try to move down
 	if (y > 0) {
-		uint np = srcGrid[x][y-1][z];
+		uint np = srcGrid[x][y - 1][z];
 		if (np == P_AIR || isGas(np)) {
-			uint wp = atomicCompSwap(dstGrid[x][y-1][z], np, p);
+			uint wp = atomicCompSwap(dstGrid[x][y - 1][z], np, p);
 			if (wp == np) {
 				atomicExchange(dstGrid[x][y][z], np);
 				return;
@@ -205,7 +216,49 @@ void processImmovableSolids(uint x, uint y, uint z) {
 }
 
 void processGases(uint x, uint y, uint z) {
-	
+	uint p = srcGrid[x][y][z];
+	// Try to move up
+	if (y < (GRID_SIZE - 1)) {
+		uint np = srcGrid[x][y + 1][z];
+		if (np == P_AIR) {
+			uint wp = atomicCompSwap(dstGrid[x][y + 1][z], np, p);
+			if (wp == np) {
+				atomicExchange(dstGrid[x][y][z], np);
+				return;
+			}
+		}
+	}
+	// Else, try to move sideways
+	uint[4] moves;
+	for (uint i = 0; i < 4; i++) moves[i] = i;
+	shuffleMoves(moves);
+	for (uint m = 0; m < 4; m++) {
+		ivec3 move;
+		switch(moves[m]) {
+			case 0:
+				move = ivec3(x - 1, y, z);
+				break;
+			case 1:
+				move = ivec3(x + 1, y, z);
+				break;
+			case 2:
+				move = ivec3(x, y, z - 1);
+				break;
+			case 3:
+				move = ivec3(x, y, z + 1);
+				break;
+		}
+		if (move.x >= 0 && move.x < GRID_SIZE && move.z >= 0 && move.z < GRID_SIZE) {
+			uint np = srcGrid[move.x][move.y][move.z];
+			if (np == P_AIR) {
+				uint wp = atomicCompSwap(dstGrid[move.x][move.y][move.z], np, p);
+				if (wp == np) {
+					atomicExchange(dstGrid[x][y][z], np);
+					return;
+				}
+			}
+		}
+	}
 }
 
 void main() {

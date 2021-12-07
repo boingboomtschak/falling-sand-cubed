@@ -19,6 +19,7 @@ const int P_WATER = 2;
 const int P_SAND = 3;
 const int P_OIL = 4;
 const int P_SALT = 5;
+const int P_STEAM = 6;
 
 uniform int grid_size;
 uniform vec4 stoneColor;
@@ -26,6 +27,7 @@ uniform vec4 waterColor;
 uniform vec4 sandColor;
 uniform vec4 oilColor;
 uniform vec4 saltColor;
+uniform vec4 steamColor;
 uniform mat4 persp;
 uniform mat4 modelview;
 
@@ -70,6 +72,9 @@ void main() {
 			break;
 		case P_SALT:
 			color = saltColor;
+			break;
+		case P_STEAM:
+			color = steamColor;
 			break;
 	}
 	

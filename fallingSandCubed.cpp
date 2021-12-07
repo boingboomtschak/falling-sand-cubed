@@ -48,6 +48,7 @@ float waterColor[4] = { 0.1f, 0.1f, 0.7f, 0.5f };
 float sandColor[4] = { 0.906f, 0.702f, 0.498f, 1.0f };
 float oilColor[4] = { 0.133f, 0.067f, 0.223f, 0.5f };
 float saltColor[4] = { 0.902f, 0.906f, 0.910f, 1.0f };
+float steamColor[4] = { 0.714f, 0.976f, 1.0f, 0.5f };
 
 // Window show toggles
 static bool showAbout = false;
@@ -70,6 +71,7 @@ enum ParticleType {
 	SAND = 3,
 	OIL = 4,
 	SALT = 5,
+	STEAM = 6,
 };
 
 int brushElement = SAND;
@@ -82,7 +84,7 @@ struct Particle {
 
 struct ParticleGrid {
 	Particle particles[MAX_PARTICLES];
-	int num_particles = 0, stone = 0, water = 0, sand = 0, oil = 0, salt = 0;
+	int num_particles = 0, stone = 0, water = 0, sand = 0, oil = 0, salt = 0, steam = 0;
 	GLuint grid[GRID_SIZE][GRID_SIZE][GRID_SIZE];
 	ParticleGrid() {
 		for (int i = 0; i < GRID_SIZE; i++)
@@ -134,7 +136,7 @@ struct ParticleGrid {
 		writeGrid();
 	}
 	void updateParticles() {
-		num_particles = 0, stone = 0, water = 0, sand = 0, oil = 0, salt = 0;
+		num_particles = 0, stone = 0, water = 0, sand = 0, oil = 0, salt = 0, steam = 0;
 		for (int i = 0; i < GRID_SIZE; i++) {
 			for (int j = 0; j < GRID_SIZE; j++) {
 				for (int k = 0; k < GRID_SIZE; k++) {
@@ -150,6 +152,7 @@ struct ParticleGrid {
 						if (grid[i][j][k] == SAND) sand++;
 						if (grid[i][j][k] == OIL) oil++;
 						if (grid[i][j][k] == SALT) salt++;
+						if (grid[i][j][k] == STEAM) steam++;
 						num_particles++;
 					}
 				}
@@ -214,6 +217,9 @@ struct ParticleGrid {
 						case SALT:
 							SetUniform(renderProgram, "color", vec4(saltColor[0], saltColor[1], saltColor[2], saltColor[3]));
 							break;
+						case STEAM:
+							SetUniform(renderProgram, "color", vec4(steamColor[0], steamColor[1], steamColor[2], steamColor[3]));
+							break;
 						}
 						glDrawElements(GL_TRIANGLES, 36, GL_UNSIGNED_INT, cube_triangles);
 					}
@@ -235,6 +241,7 @@ struct ParticleGrid {
 		SetUniform(gridRenderProgram, "sandColor", vec4(sandColor[0], sandColor[1], sandColor[2], sandColor[3]));
 		SetUniform(gridRenderProgram, "oilColor", vec4(oilColor[0], oilColor[1], oilColor[2], oilColor[3]));
 		SetUniform(gridRenderProgram, "saltColor", vec4(saltColor[0], saltColor[1], saltColor[2], saltColor[3]));
+		SetUniform(gridRenderProgram, "steamColor", vec4(steamColor[0], steamColor[1], steamColor[2], steamColor[3]));
 		SetUniform(gridRenderProgram, "persp", camera.persp);
 		SetUniform(gridRenderProgram, "modelview", camera.modelview);
 		SetUniform(gridRenderProgram, "light_pos", lightPos);
@@ -328,6 +335,9 @@ void ChangeBrush(int pType) {
 		break;
 	case SALT:
 		brushElementString = "SALT";
+		break;
+	case STEAM:
+		brushElementString = "STEAM";
 		break;
 	}
 }
@@ -424,6 +434,9 @@ void S_Keyboard(GLFWwindow* window, int key, int scancode, int action, int mods)
 		case GLFW_KEY_6:
 			ChangeBrush(SALT);
 			break;
+		case GLFW_KEY_7:
+			ChangeBrush(STEAM);
+			break;
 	}
 }
 
@@ -506,6 +519,7 @@ void ShowOverlayWindow(bool* p_open) {
 			ImGui::Text("Sand:  %i", grid.sand);
 			ImGui::Text("Oil:   %i", grid.oil);
 			ImGui::Text("Salt:  %i", grid.salt);
+			ImGui::Text("Steam: %i", grid.steam);
 			ImGui::Text("Grid: %ix%ix%i", GRID_SIZE, GRID_SIZE, GRID_SIZE);
 			ImGui::Text("(Total %i)", GRID_SIZE * GRID_SIZE * GRID_SIZE);
 		}
@@ -575,6 +589,7 @@ void RenderImGui() {
 			if (ImGui::MenuItem("Sand", "4", brushElement == SAND)) ChangeBrush(SAND);
 			if (ImGui::MenuItem("Oil", "5", brushElement == OIL)) ChangeBrush(OIL);
 			if (ImGui::MenuItem("Salt", "6", brushElement == SALT)) ChangeBrush(SALT);
+			if (ImGui::MenuItem("Steam", "7", brushElement == STEAM)) ChangeBrush(STEAM);
 			ImGui::EndMenu();
 		}
 		ImGui::SliderInt("Radius", &brushRadius, 1, 10);
@@ -592,6 +607,7 @@ void RenderImGui() {
 		ImGui::ColorEdit4("Sand Color", sandColor);
 		ImGui::ColorEdit4("Oil Color", oilColor);
 		ImGui::ColorEdit4("Salt Color", saltColor);
+		ImGui::ColorEdit4("Steam Color", steamColor);
 		ImGui::EndMenu();
 	}
 	if (ImGui::BeginMenu("Debug")) {
