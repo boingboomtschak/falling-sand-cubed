@@ -18,8 +18,10 @@ Any issues doing so can be reported in the [Issues](https://github.com/d-mckee/f
 
 ## Demo
 
-Short video of basic functionality
+Short video of basic functionality:
+
 https://user-images.githubusercontent.com/36770835/145133517-5377dbb7-a3ed-4378-ac2a-fa35aa32194a.mp4
 
 Screenshot of some UI elements
+
 ![UI element demo](https://user-images.githubusercontent.com/36770835/145133572-bcfefc5a-1248-4b32-8a80-35fa195a23aa.png)
